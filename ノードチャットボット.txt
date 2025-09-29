@@ -1,0 +1,874 @@
+//gemini in geminiのチャットボット。canvasでこれを展開すると利用できる
+
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import {
+  Send, MessageSquare, Database, Loader, X, Sparkles, Network, Brain, Search,
+  FileText, Hash, Download, AlertCircle, Settings as SettingsIcon, Plus, Tag, Trash2
+} from 'lucide-react';
+
+// ============ Type Definitions ============
+type NodeType =
+  | 'ag' | 'org' | 'obj' | 'loc'
+  | 'con' | 'act' | 'evt' | 'top'
+  | 'doc' | 'dat' | 'req' | 'res'
+  | 'prc' | 'sta' | 'rel' | 'att'
+  | 'unknown';
+
+type SourceType = 'user' | 'ai';
+
+interface EdgeEntry {
+  turn: number;
+  to?: string;
+  from?: string;
+  relation: string;
+  description?: string;
+}
+
+interface DescriptionEntry {
+  turn: number;
+  text: string;
+  source: SourceType;
+}
+
+interface NodeData {
+  id: string;
+  name?: string | null;
+  type: NodeType;
+  firstTurn: number;
+  lastTurn: number;
+  occurrences: number;
+  turns: number[];
+  attributes: Record<string, any>;
+  descriptions: DescriptionEntry[];
+  edges: EdgeEntry[];
+  source?: SourceType;
+}
+
+interface AnalysisNode {
+  id: string;
+  name?: string;
+  type: NodeType;
+  description?: string;
+  source?: SourceType;
+  attributes?: Record<string, any>;
+}
+
+interface AnalysisEdge {
+  from: string;
+  to: string;
+  relation: string;
+  description?: string;
+}
+
+interface AnalysisResult {
+  nodes: AnalysisNode[];
+  edges: AnalysisEdge[];
+  keywords: string[];
+}
+
+interface ChatMessage {
+  id: number;
+  type: 'user' | 'bot' | 'summary';
+  content: string;
+  turn: number;
+  qualityScore?: number;
+  evaluation?: any;
+  userResponseType?: string;
+  metadata?: any;
+  headline?: string;
+}
+
+// ============ Constants ============
+const NODE_TAG_REGEX = /<([^#>]*)#([^>]+)>/g;
+
+const ID_PREFIXES: Record<string, string> = {
+  ag: 'agent/人物', org: 'organization/組織', obj: 'object/物体', loc: 'location/場所',
+  con: 'concept/概念', act: 'action/行動', evt: 'event/出来事', top: 'topic/話題',
+  doc: 'document/文書', dat: 'data/データ', req: 'request/要求', res: 'response/応答',
+  prc: 'process/過程', sta: 'state/状態', rel: 'relation/関係', att: 'attribute/属性',
+  unknown: 'unknown/不明',
+};
+
+const typeColor = (t: NodeType) => {
+  const map: Record<NodeType, string> = {
+    ag: '#2563eb', org: '#7c3aed', obj: '#0ea5e9', loc: '#22c55e',
+    con: '#f59e0b', act: '#ef4444', evt: '#14b8a6', top: '#6b7280',
+    doc: '#8b5cf6', dat: '#84cc16', req: '#06b6d4', res: '#d946ef',
+    prc: '#f97316', sta: '#9ca3af', rel: '#10b981', att: '#93c5fd',
+    unknown: '#9ca3af',
+  };
+  return map[t] || '#9ca3af';
+};
+
+// ============ Gemini API Call Function (Replaces Claude) ============
+const callGeminiAPI = async (
+  userPrompt: string,
+  systemPrompt?: string,
+  jsonMode: boolean = false
+) => {
+  const apiKey = ""; // Canvas environment provides the key automatically
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+  const payload: any = {
+    contents: [{ parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      temperature: 0.6,
+      maxOutputTokens: 8192,
+    }
+  };
+
+  if (systemPrompt) {
+    payload.systemInstruction = { parts: [{ text: systemPrompt }] };
+  }
+
+  if (jsonMode) {
+    payload.generationConfig.responseMimeType = "application/json";
+  }
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || `API request failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    return stripFenceToJSON(text); // Keep for robustness, even if Gemini's JSON mode is clean
+  } catch (error) {
+    console.error('Gemini API Error:', error);
+    throw error;
+  }
+};
+
+// ============ Helper Functions ============
+const stripFenceToJSON = (text: string) =>
+  text.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
+
+const tryParseJSON = <T=any>(raw: string): { ok: true; data: T } | { ok: false; error: any } => {
+  try {
+    return { ok: true, data: JSON.parse(raw) };
+  } catch (e) {
+    return { ok: false, error: e };
+  }
+};
+
+const safeTruncate = (s: string, n: number) => (s || '').length > n ? s.slice(0, n - 1) + '…' : s || '';
+
+// ============ Prompts for Gemini (Faithfully Reproduced) ============
+const SYSTEM_PROMPT = `あなたは親切で高性能なAIアシスタントです。以下の指示に厳密に従ってください。
+
+A. ノードタグの仕様:
+- 会話中の重要な概念、人、場所、キーワードは、必ず <名前#id> という形式のタグで囲んでください。
+- idは [prefix]-[slug] という形式で作成します。prefixは次の通りです: ag, org, obj, loc, con, act, evt, top, doc, dat, req, res, prc, sta, rel, att。slugは英小文字、数字、ハイフンのみ使用可能です。
+- 例: <アリス#ag-alice>, <AI倫理#con-ai-ethics>, <東京#loc-tokyo>
+- 一度使用したidは、同じ対象を指す場合に必ず再利用してください。
+
+B. 会話メモの仕様 (AIの応答の最後に必ず追記):
+- 以下の変数をAIの応答の最後に記述してください。
+  1. $session.theme: 会話全体の主要テーマ
+  2. $user.wish: ユーザーの根本的な願望
+  3. $user.request: ユーザーの具体的な要求や質問
+  4. $unknown: AIが不明だと感じた点や、ユーザーに確認したい事項
+
+C. トーン＆マナー:
+- 常に明瞭かつ簡潔な文章を心がけ、必要に応じて箇条書きを使用してください。
+`;
+
+const ANALYSIS_PROMPT = `以下の対話を分析し、重要なノード・関係を抽出。
+
+制限：
+- ノード最大10個（重要なもののみ）
+- エッジ最大10個（重要なもののみ）  
+- 説明は簡潔に（20-30文字程度）
+- 完全なJSONで出力
+
+入力テキスト:
+[USER]: {userMessage}
+[AI]: {aiMessage}
+
+JSON形式で返答:
+{
+  "nodes": [
+    { "id":"ag-example","name":"Example","type":"ag","description":"簡潔な説明","source":"ai","attributes":{} }
+  ],
+  "edges": [
+    { "from":"id1","to":"id2","relation":"関係","description":"説明" }
+  ],
+  "keywords": []
+}`;
+
+
+// ============ Main Component ============
+export default function RobustNodeChatbotWithGemini() {
+  const [activeTab, setActiveTab] = useState<'chat' | 'nodes' | 'parsed' | 'flow'>('chat');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [turnCount, setTurnCount] = useState(1);
+  const [analysisQueue, setAnalysisQueue] = useState<Array<{ userMessage: string; aiMessage: string; turn: number }>>([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [autoAnalyze, setAutoAnalyze] = useState(true);
+  const [oneLineSummaries, setOneLineSummaries] = useState<Array<{ turn: number; headline: string }>>([]);
+  const [useHeadlineContext, setUseHeadlineContext] = useState(true);
+  const [lastSummaryTurn, setLastSummaryTurn] = useState(0);
+  const [summaries, setSummaries] = useState<any[]>([]);
+  const [parsedData, setParsedData] = useState<Record<string, Array<{ turn: number; value: string }>>>({
+    '$session.theme': [], '$user.wish': [], '$user.request': [], '$unknown': []
+  });
+  const [nodeRegistry, setNodeRegistry] = useState<Map<string, NodeData>>(new Map());
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [showNodeDetails, setShowNodeDetails] = useState(false);
+  const [aiProcessingSteps, setAiProcessingSteps] = useState<any[]>([]);
+  const [debugMode, setDebugMode] = useState(false);
+  const [parseErrors, setParseErrors] = useState<Array<{turn: number; error: string}>>([]);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Settings states
+  const [showSettings, setShowSettings] = useState(false);
+  const [userAgreements, setUserAgreements] = useState<string>('');
+  const [includeUserAgreements, setIncludeUserAgreements] = useState(true);
+  const [userPinnedKeywords, setUserPinnedKeywords] = useState<string[]>([]);
+  const [keywordInput, setKeywordInput] = useState('');
+  const [includeUserKeywords, setIncludeUserKeywords] = useState(true);
+  const [includeBaseGraphInB, setIncludeBaseGraphInB] = useState(true);
+  const [enableLLMRerank, setEnableLLMRerank] = useState(true);
+
+  const RERANK_MAX_CANDIDATES = 28;
+  const RERANK_TOP_K = 12;
+  const CANDIDATE_SNIPPET_CHARS = 360;
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  useEffect(() => {
+    if (analysisQueue.length > 0 && !isAnalyzing) {
+      processAnalysisQueue();
+    }
+  }, [analysisQueue, isAnalyzing]);
+
+  const processAnalysisQueue = async () => {
+    if (analysisQueue.length === 0) return;
+    setIsAnalyzing(true);
+    const item = analysisQueue[0];
+    const analysisPrompt = ANALYSIS_PROMPT
+        .replace('{userMessage}', item.userMessage)
+        .replace('{aiMessage}', item.aiMessage);
+
+    try {
+        const text = await callGeminiAPI(analysisPrompt, undefined, true);
+        const parseResult = tryParseJSON<AnalysisResult>(text);
+        if (parseResult.ok) {
+            updateNodeRegistry(parseResult.data, item.turn);
+        } else {
+            console.error('解析JSONパース失敗:', parseResult.error, 'Raw text:', text);
+            setParseErrors(prev => [...prev, {turn: item.turn, error: `JSON Parse Error: ${parseResult.error}`}]);
+        }
+    } catch (e) {
+        console.error('解析エラー:', e);
+        setParseErrors(prev => [...prev, {turn: item.turn, error: String(e)}]);
+    } finally {
+        setAnalysisQueue((prev) => prev.slice(1));
+        setIsAnalyzing(false);
+    }
+  };
+  
+  const updateNodeRegistry = useCallback((analysisResult: AnalysisResult, turn: number) => {
+    setNodeRegistry((prev) => {
+      const newRegistry = new Map(prev);
+      (analysisResult.nodes || []).slice(0, 10).forEach((node) => {
+        if (!node.id) return;
+        const existing = newRegistry.get(node.id);
+        if (existing) {
+          existing.occurrences++;
+          existing.lastTurn = turn;
+          if (!existing.turns.includes(turn)) existing.turns.push(turn);
+          if (node.description && !existing.descriptions.some(d => d.text === node.description)) {
+            existing.descriptions.push({ turn, text: node.description, source: node.source || 'ai' });
+          }
+        } else {
+          newRegistry.set(node.id, {
+            id: node.id, name: node.name, type: (node.type || 'unknown'), firstTurn: turn, lastTurn: turn,
+            occurrences: 1, turns: [turn], attributes: node.attributes || {},
+            descriptions: node.description ? [{ turn, text: node.description, source: node.source || 'ai' }] : [], edges: []
+          });
+        }
+      });
+      const seen = new Set<string>();
+      (analysisResult.edges || []).slice(0, 10).forEach((edge) => {
+        const key = `${edge.from}->${edge.to}:${edge.relation}`;
+        if (seen.has(key) || !newRegistry.has(edge.from) || !newRegistry.has(edge.to)) return;
+        seen.add(key);
+        const fromNode = newRegistry.get(edge.from)!;
+        if (!fromNode.edges.some(e => e.to === edge.to && e.relation === edge.relation)) {
+            fromNode.edges.push({ turn, to: edge.to, relation: edge.relation, description: edge.description });
+        }
+        const toNode = newRegistry.get(edge.to)!;
+         if (!toNode.edges.some(e => e.from === edge.from && e.relation === edge.relation + ' (逆)')) {
+            toNode.edges.push({ turn, from: edge.from, relation: edge.relation + ' (逆)', description: edge.description });
+        }
+      });
+      return newRegistry;
+    });
+  }, []);
+
+  const quickParseNodes = (text: string, turn: number, source: SourceType) => {
+    if (!text) return;
+    setNodeRegistry((prev) => {
+      const newRegistry = new Map(prev);
+      for (const match of text.matchAll(NODE_TAG_REGEX)) {
+        const name = match[1] || null;
+        const id = match[2];
+        const type = (id.split('-')[0] as NodeType) || 'unknown';
+        if (newRegistry.has(id)) {
+          const n = newRegistry.get(id)!;
+          n.occurrences++; n.lastTurn = turn;
+          if (!n.turns.includes(turn)) n.turns.push(turn);
+          if (!n.name && name) n.name = name;
+        } else {
+          newRegistry.set(id, { id, name, type, firstTurn: turn, lastTurn: turn, occurrences: 1, turns: [turn], attributes: {}, descriptions: [], edges: [], source });
+        }
+      }
+      return newRegistry;
+    });
+  };
+
+  const parseMessageMemo = (message: string, turn: number) => {
+    if (!message.includes('$')) return;
+    const newParsed = { ...parsedData };
+    const dollarPatterns: Record<string, RegExp> = {
+      '$session.theme': /\$session\.theme[:：]?\s*([^$#<]+?)(?=\$|#|<|$)/gi,
+      '$user.wish': /\$user\.wish[:：]?\s*([^$#<]+?)(?=\$|#|<|$)/gi,
+      '$user.request': /\$user\.request[:：]?\s*([^$#<]+?)(?=\$|#|<|$)/gi,
+      '$unknown': /\$unknown[:：]?\s*([^$#<]+?)(?=\$|#|<|$)/gi,
+    };
+    Object.entries(dollarPatterns).forEach(([key, pattern]) => {
+      for (const match of message.matchAll(pattern)) {
+        if (match[1]) newParsed[key].push({ turn, value: match[1].trim() });
+      }
+    });
+    setParsedData(newParsed);
+  };
+  
+  const generateOneLine = async (userMessage: string, botMessage: string) => {
+    const prompt = `次のやりとりの要点を1行で見出し化してください。30文字以内、日本語。
+
+    [User] ${safeTruncate(userMessage, 200)}
+    [Assistant] ${safeTruncate(botMessage, 200)}
+    
+    JSONのみ:
+    {"headline":"..."}`;
+    try {
+        const text = await callGeminiAPI(prompt, undefined, true);
+        const obj = tryParseJSON<{headline: string}>(text);
+        if (obj.ok && obj.data && typeof obj.data.headline === 'string') {
+          return { headline: obj.data.headline.trim() };
+        }
+        console.warn('One-line summary response was not in the expected format:', text);
+        return null;
+    } catch (e) { console.error('One-line summary error:', e); return null; }
+  };
+
+  const generateSummary = async () => {
+    const recentMessages = messages.filter(m => m.turn > lastSummaryTurn && m.type !== 'summary');
+    if (recentMessages.length === 0) return null;
+    const prompt = `以下の会話を簡潔に要約。JSONのみ、各項目は簡潔に:
+    範囲: ${lastSummaryTurn + 1}-${turnCount - 1}
+
+    会話（最新5件のみ）:
+    ${recentMessages.slice(-5).map(m => `T${m.turn}: ${safeTruncate(m.content, 100)}`).join('\n')}
+
+    {"turnRange":"${lastSummaryTurn + 1}-${turnCount - 1}","mainThemes":[],"summary":""}`;
+    try {
+        const text = await callGeminiAPI(prompt, undefined, true);
+        const parsed = tryParseJSON(text);
+        return parsed.ok ? parsed.data : null;
+    } catch (e) { console.error('Summary generation error:', e); return null; }
+  };
+
+  const analyzeUserIntent = async (userMessage: string, recentHistory: ChatMessage[], allMessages: ChatMessage[]) => {
+    const lastBot = [...allMessages].reverse().find(m => m.type === 'bot');
+    const prompt = `ユーザーメッセージと会話履歴を第三者視点で分析。JSONのみ:
+    ユーザー: "${userMessage}"
+
+    直前履歴:
+    ${recentHistory.map((m) => `${m.type === 'user' ? 'User' : 'AI'}: ${safeTruncate(m.content, 220)}`).join('\n')}
+
+    ${lastBot ? `前回AI:\nAI: ${safeTruncate(lastBot.content, 400)}` : ''}
+
+    {
+      "hasSpecificIntent": true,
+      "intentType": "request",
+      "userResponseType": "neutral",
+      "emotionalTone": "neutral",
+      "keywords": [],
+      "gapWithPreviousResponse": false,
+      "summary": "",
+      "previousResponseEvaluation": {
+        "userSatisfaction": "neutral",
+        "hasExplicitNegativeFeedback": false,
+        "negativeFeedbackType": "none",
+        "evaluationConfidence": "medium",
+        "isInLoop": false,
+        "loopCount": 0,
+        "specificIssue": ""
+      }
+    }`;
+    try {
+      const text = await callGeminiAPI(prompt, undefined, true);
+      const parsed = tryParseJSON(text);
+      const analysis = parsed.ok ? parsed.data : { hasSpecificIntent: false, summary: '分析エラー' };
+      if (debugMode) console.log('AI-A Analysis:', analysis);
+      setAiProcessingSteps((prev) => [...prev, { ai: 'AI-A', turn: turnCount, result: analysis }]);
+      return analysis;
+    } catch (e) {
+      console.error('AI-A Error:', e);
+      return { hasSpecificIntent: false, summary: '通常会話' };
+    }
+  };
+
+    const makeLLMRerankPrompt = ({
+        userMessage, pinnedKeywords, latestHeadlines, sessionNotes, candidates
+    }: {
+        userMessage: string;
+        pinnedKeywords: string[];
+        latestHeadlines: string[];
+        sessionNotes: { theme?: string; wish?: string; request?: string; unknown?: string };
+        candidates: Array<{ turn: number; role: 'user' | 'bot' | 'summary'; text: string; tags: string[] }>;
+    }) => {
+        const kwLine = pinnedKeywords.length ? `優先キーワード: ${pinnedKeywords.join(', ')}` : '優先キーワード: なし';
+        const headLine = latestHeadlines.length ? `直近要約: ${latestHeadlines.join(' / ')}` : '直近要約: なし';
+        const noteLines = [
+        sessionNotes.theme ? `$session.theme: ${sessionNotes.theme}` : '',
+        sessionNotes.wish ? `$user.wish: ${sessionNotes.wish}` : '',
+        sessionNotes.request ? `$user.request: ${sessionNotes.request}` : '',
+        sessionNotes.unknown ? `$unknown: ${sessionNotes.unknown}` : '',
+        ].filter(Boolean).join('\n');
+
+        const candBlock = candidates.map(c => {
+        const tagStr = c.tags.length ? ` tags=[${c.tags.slice(0, 6).join(', ')}]` : '';
+        return `- T${c.turn} (${c.role})${tagStr}\n  ${safeTruncate(c.text, CANDIDATE_SNIPPET_CHARS)}`;
+        }).join('\n');
+
+        return `あなたは会話検索のリランカーです。以下の情報に基づき、現在のユーザー発話に最も関連の高い過去ターンを選び、順位付けしてください。
+
+        考慮事項:
+        - ユーザー発話と意味的に関連の高いターンを優先
+        - 優先キーワードが一致するものを加点
+        - 直近要約や$メモ（theme/wish/request/unknown）に整合するものを優先
+        - 同内容の重複は避け、多様性を確保
+        - role=summary は通常除外（必要性が明確な場合のみ低優先で採用）
+        - 出力は必ずJSONのみ
+
+        ユーザー発話:
+        ${userMessage}
+
+        ${kwLine}
+        ${headLine}
+        ${noteLines ? `\n${noteLines}\n` : ''}
+
+        候補ターン（最大${candidates.length}件）:
+        ${candBlock}
+
+        JSONのみで返答:
+        {
+        "selected_turns": [整数のターン番号 配列、最大${RERANK_TOP_K}],
+        "ranked": [
+            { "turn": 12, "score": 0.92, "reasons": ["keyword一致: ...", "意味的近さ: ..."] }
+        ]
+        }`;
+    };
+
+    const searchRelevantContext = useCallback(async (intentAnalysis: any) => {
+        const extractNodeIds = (text: string): string[] => {
+            if (!text) return [];
+            return [...text.matchAll(NODE_TAG_REGEX)].map(m => m[2]);
+        };
+        const pickLatest = (arr: Array<{turn: number; value: string}>, n = 3) =>
+            [...arr].sort((a, b) => b.turn - a.turn).slice(0, n);
+
+        try {
+            const curMessages = [...messages];
+            const recent = curMessages.slice(-60);
+            const iaKeywords: string[] = Array.isArray(intentAnalysis?.keywords) ? intentAnalysis.keywords.map(String) : [];
+            const pinned = includeUserKeywords ? userPinnedKeywords : [];
+            const allKeywords = [...new Set([...iaKeywords, ...pinned].map(k => k.trim().toLowerCase()).filter(Boolean))];
+            
+            const relevantByKW = new Set<number>();
+            if (allKeywords.length) {
+                recent.forEach(m => { if (allKeywords.some(kw => (m.content || '').toLowerCase().includes(kw))) relevantByKW.add(m.turn); });
+            }
+
+            const candidateTurnSet = new Set<number>([...relevantByKW]);
+            recent.slice(-30).forEach(m => { if(m.type !== 'summary') candidateTurnSet.add(m.turn) });
+            const candidateTurns = [...candidateTurnSet].sort((a, b) => b - a).slice(0, RERANK_MAX_CANDIDATES);
+
+            let selectedTurns: number[] = [];
+            let rerankMeta: any = null;
+
+            if (enableLLMRerank && candidateTurns.length > 0) {
+                const turnToMsg = new Map<number, ChatMessage>(recent.map(m => [m.turn, m]));
+                const candidates = candidateTurns.map(t => {
+                    const m = turnToMsg.get(t)!;
+                    return { turn: t, role: m.type, text: m.content, tags: extractNodeIds(m.content || '') };
+                });
+
+                const rerankPrompt = makeLLMRerankPrompt({
+                    userMessage: curMessages[curMessages.length - 1].content,
+                    pinnedKeywords,
+                    latestHeadlines: oneLineSummaries.slice(-3).map(h => h.headline),
+                    sessionNotes: {
+                        theme: pickLatest(parsedData['$session.theme'], 1)[0]?.value,
+                        wish: pickLatest(parsedData['$user.wish'], 1)[0]?.value,
+                        request: pickLatest(parsedData['$user.request'], 1)[0]?.value,
+                        unknown: pickLatest(parsedData['$unknown'], 1)[0]?.value,
+                    },
+                    candidates
+                });
+                
+                 try {
+                    const llmText = await callGeminiAPI(rerankPrompt, undefined, true);
+                    const parsed = tryParseJSON<{selected_turns: number[], ranked: any[]}>(llmText);
+                    if (parsed.ok && Array.isArray(parsed.data.selected_turns)) {
+                      selectedTurns = parsed.data.selected_turns.slice(0, RERANK_TOP_K);
+                      rerankMeta = parsed.data;
+                    }
+                 } catch (e) { console.error('LLM rerank error:', e); }
+            }
+            if (selectedTurns.length === 0) selectedTurns = candidateTurns.slice(0, RERANK_TOP_K);
+            
+            const contextNotes: Array<{ importance: 'high'|'medium'|'low'; content: string }> = [];
+            if (includeUserAgreements && userAgreements.trim()) contextNotes.push({ importance: 'high', content: `ユーザー約束: ${userAgreements.trim()}` });
+
+            return { relevantTurns: selectedTurns.sort((a, b) => a - b), contextNotes, rerankMeta };
+        } catch (e) {
+            console.error('searchRelevantContext error:', e);
+            return { relevantTurns: [], contextNotes: [], rerankMeta: null };
+        }
+    }, [messages, parsedData, oneLineSummaries, userAgreements, userPinnedKeywords, includeUserAgreements, includeUserKeywords, enableLLMRerank]);
+
+    const buildCuratedHistory = (searchResult: any, recentHistory: ChatMessage[]) => {
+      let base: ChatMessage[] = [];
+      if (searchResult?.relevantTurns?.length) {
+        const relevant = messages.filter((m) => searchResult.relevantTurns.includes(m.turn));
+        base = [...new Map([...relevant, ...recentHistory].map(item => [item.id, item])).values()].sort((a, b) => a.turn - b.turn);
+      } else {
+        base = messages.slice(-20);
+      }
+      return base.slice(-24);
+    };
+
+    const generateCustomResponse = async (userMessage: string, customHistory: ChatMessage[], contextNotes: any[], promptAddition: string) => {
+        // Gemini API expects roles 'user' and 'model'
+        const historyForPrompt = customHistory.map(m => {
+            const role = m.type === 'user' ? 'user' : 'model';
+            return `${role}: ${m.content}`;
+        }).join('\n');
+        
+        const agreementsBlock = includeUserAgreements && userAgreements.trim() ? `\nユーザー約束（厳守）:\n${userAgreements.trim()}` : '';
+        const keywordsBlock = includeUserKeywords && userPinnedKeywords.length ? `\nユーザー優先キーワード:\n- ${userPinnedKeywords.join('\n- ')}` : '';
+        const contextText = contextNotes.length ? `\n重要なコンテキスト:\n${contextNotes.map(n => `- [${n.importance}] ${n.content}`).join('\n')}` : '';
+
+        const system = `${SYSTEM_PROMPT}${agreementsBlock}${keywordsBlock}${contextText}${promptAddition ? `\n追加指示: ${promptAddition}` : ''}`;
+        const prompt = `${historyForPrompt}\nuser: ${userMessage}`;
+
+        try {
+            const response = await callGeminiAPI(prompt, system);
+            setAiProcessingSteps(prev => [...prev, { ai: 'AI-C', turn: turnCount, result: { response: 'Generated' } }]);
+            return response;
+        } catch (e) {
+            console.error('AI-C Error:', e);
+            return '申し訳ございません。エラーが発生しました。';
+        }
+    };
+
+  const sendMessage = async () => {
+    if (!input.trim() || isLoading) return;
+    const currentTurn = turnCount;
+    const userMsg: ChatMessage = { id: Date.now(), type: 'user', content: input, turn: currentTurn };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsLoading(true);
+    setAiProcessingSteps([]);
+    quickParseNodes(userMsg.content, currentTurn, 'user');
+
+    try {
+      const curMessages = [...messages, userMsg];
+      const recentHistory = curMessages.slice(-5);
+      const intentAnalysis = await analyzeUserIntent(userMsg.content, recentHistory, curMessages);
+      let searchResult: any = { relevantTurns: [], contextNotes: [], rerankMeta: null };
+      if (intentAnalysis.hasSpecificIntent) {
+        searchResult = await searchRelevantContext(intentAnalysis);
+      }
+      const curatedHistory = buildCuratedHistory(searchResult, recentHistory);
+      const aiText = await generateCustomResponse(userMsg.content, curatedHistory, searchResult.contextNotes, searchResult.suggestedPromptAddition || '');
+      const botMsg: ChatMessage = {
+        id: Date.now() + 1, type: 'bot', content: aiText, turn: currentTurn + 1,
+        metadata: { intentAnalysis, searchResult, customHistoryTurns: curatedHistory.map(m => m.turn) },
+      };
+      parseMessageMemo(aiText, currentTurn + 1);
+      quickParseNodes(aiText, currentTurn + 1, 'ai');
+      const oneLine = await generateOneLine(userMsg.content, aiText);
+      if (oneLine) {
+        botMsg.headline = oneLine.headline;
+        setOneLineSummaries(prev => [...prev, { turn: currentTurn + 1, headline: oneLine.headline }]);
+      }
+      setMessages(prev => [...prev, botMsg]);
+      if (autoAnalyze) {
+        setAnalysisQueue(prev => [...prev, { userMessage: userMsg.content, aiMessage: aiText, turn: currentTurn }]);
+      }
+      setTurnCount(t => t + 2);
+    } catch (e) {
+      console.error('sendMessage error:', e);
+      const errMsg: ChatMessage = {
+        id: Date.now() + 9, type: 'bot', content: `エラー: ${String((e as any)?.message || e)}`, turn: currentTurn + 1,
+      };
+      setMessages(prev => [...prev, errMsg]);
+      setTurnCount(t => t + 2);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+    
+const MessageDisplay = ({ content, who }: { content: string; who: 'user' | 'bot' }) => {
+    const parts: Array<{ type: 'text'; content: string } | { type: 'node'; displayName: string; id: string; nodeData?: NodeData }> = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    NODE_TAG_REGEX.lastIndex = 0;
+
+    while ((match = NODE_TAG_REGEX.exec(content)) !== null) {
+      if (match.index > lastIndex) parts.push({ type: 'text', content: content.substring(lastIndex, match.index) });
+      const node = nodeRegistry.get(match[2]);
+      parts.push({ type: 'node', displayName: match[1] || match[2], id: match[2], nodeData: node });
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < content.length) parts.push({ type: 'text', content: content.substring(lastIndex) });
+
+    return (
+      <div className="whitespace-pre-wrap">
+        {parts.map((part, idx) =>
+          part.type === 'text' ? (
+            <span key={idx}>{part.content}</span>
+          ) : (
+            <span
+              key={idx}
+              onClick={() => {
+                setSelectedNodeId(part.id);
+                setShowNodeDetails(true);
+              }}
+              className={`cursor-pointer inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-md transition-all
+              ${who === 'user' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'} hover:opacity-80`}
+              title={`ID: ${part.id} | 出現: ${part.nodeData?.occurrences || 0}回`}
+            >
+              <span className="font-medium">{part.displayName}</span>
+              {(part.nodeData?.occurrences || 0) > 1 && <span className="text-xs">×{part.nodeData?.occurrences}</span>}
+            </span>
+          )
+        )}
+      </div>
+    );
+  };
+
+  const NodeDetailsModal = () => {
+    if (!showNodeDetails || !selectedNodeId) return null;
+    const node = nodeRegistry.get(selectedNodeId);
+    if (!node) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowNodeDetails(false)}>
+        <div className="bg-white rounded-lg w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="p-4 border-b flex justify-between items-center">
+            <h3 className="text-lg font-bold flex items-center gap-2">
+              <Network className="w-5 h-5" />
+              ノード詳細
+            </h3>
+            <button onClick={() => setShowNodeDetails(false)}><X className="w-5 h-5" /></button>
+          </div>
+
+          <div className="p-4 overflow-y-auto space-y-4">
+            <div>
+              <div className="text-sm text-gray-600">ID</div>
+              <div className="font-mono text-lg">{node.id}</div>
+            </div>
+            {node.name && (
+              <div>
+                <div className="text-sm text-gray-600">名前</div>
+                <div className="text-lg font-medium">{node.name}</div>
+              </div>
+            )}
+            <div>
+              <div className="text-sm text-gray-600">タイプ</div>
+              <div className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">{ID_PREFIXES[node.type] || node.type}</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-600">統計</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>出現回数: {node.occurrences}回</div>
+                <div>初出: T{node.firstTurn}</div>
+                <div>最終: T{node.lastTurn}</div>
+                <div>登場ターン数: {node.turns.length}</div>
+              </div>
+            </div>
+            {node.descriptions.length > 0 && (
+              <div>
+                <div className="text-sm text-gray-600 mb-1">説明履歴</div>
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {node.descriptions.map((d, idx) => (
+                    <div key={idx} className="bg-gray-50 p-2 rounded text-sm">
+                      <div className="text-xs text-gray-500">T{d.turn} ({d.source})</div>
+                      <div>{d.text}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {node.edges.length > 0 && (
+              <div>
+                <div className="text-sm text-gray-600 mb-1">関係性</div>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {node.edges.map((e, idx) => (
+                    <div key={idx} className="bg-gray-50 p-2 rounded text-sm">
+                      <div className="text-xs text-gray-500">T{e.turn}</div>
+                      <div>{e.to && `→ ${e.to}`}{e.from && `← ${e.from}`}: {e.relation}</div>
+                      {e.description && <div className="text-xs text-gray-600">{e.description}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const typeStats = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const n of nodeRegistry.values()) {
+      counts[n.type] = (counts[n.type] || 0) + 1;
+    }
+    return counts;
+  }, [nodeRegistry]);
+
+  const exportData = () => {
+    const exportObj = {
+      messages, parsedData, summaries, oneLineSummaries,
+      nodes: Array.from(nodeRegistry.values()), parseErrors,
+      settings: { includeUserAgreements, includeUserKeywords, includeBaseGraphInB, userAgreements, userPinnedKeywords, enableLLMRerank },
+      timestamp: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `gemini-node-chat-${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-50">
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3 md:p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Network className="w-6 h-6" />
+            <div>
+              <h1 className="text-lg md:text-xl font-bold">Gemini 堅牢版ノード管理AIチャット</h1>
+              <p className="text-xs md:text-sm opacity-90">AI-A/B/C + グラフ + $メモ + LLMリランク</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 md:gap-3 text-xs">
+            <label className="flex items-center gap-1"><input type="checkbox" checked={autoAnalyze} onChange={(e) => setAutoAnalyze(e.target.checked)} />解析</label>
+            <label className="flex items-center gap-1"><input type="checkbox" checked={enableLLMRerank} onChange={(e) => setEnableLLMRerank(e.target.checked)} />BでLLMリランク</label>
+            <label className="flex items-center gap-1"><input type="checkbox" checked={debugMode} onChange={(e) => setDebugMode(e.target.checked)} />Debug</label>
+            <button onClick={() => setShowSettings(s => !s)} className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded border border-white/30 flex items-center gap-1" title="設定"><SettingsIcon size={14} />設定</button>
+            <button onClick={exportData} className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded border border-white/30" title="JSONエクスポート"><Download size={14} /></button>
+          </div>
+        </div>
+      </div>
+
+      {showSettings && (
+        <div className="bg-white border-b p-3 md:p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="font-medium text-gray-700">ユーザー約束（システムに注入）</label>
+              <textarea value={userAgreements} onChange={(e) => setUserAgreements(e.target.value)} placeholder="例) 常に丁寧語で回答。" className="w-full border rounded p-2 text-sm h-24 mt-1" />
+            </div>
+            <div>
+              <label className="font-medium text-gray-700">固定キーワード</label>
+              <div className="flex gap-2 mt-1">
+                <input value={keywordInput} onChange={(e) => setKeywordInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && keywordInput.trim()) { e.preventDefault(); setUserPinnedKeywords(prev => [...new Set([...prev, keywordInput.trim()])]); setKeywordInput(''); } }} placeholder="キーワードを入力してEnter" className="w-full border rounded px-2 py-1 text-sm" />
+              </div>
+              <div className="flex flex-wrap gap-2 mt-2">{userPinnedKeywords.map((kw) => (<span key={kw} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1 text-xs">{kw}<button onClick={() => setUserPinnedKeywords(prev => prev.filter(k => k !== kw))}><Trash2 size={12} /></button></span>))}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex bg-white border-b">
+        {[{ key: 'chat', icon: <MessageSquare className="w-4 h-4" />, label: 'チャット' }, { key: 'nodes', icon: <Database className="w-4 h-4" />, label: 'ノード' }, { key: 'parsed', icon: <Hash className="w-4 h-4" />, label: 'パース' }, { key: 'flow', icon: <Brain className="w-4 h-4" />, label: 'フロー' }].map((t: any) => (<button key={t.key} onClick={() => setActiveTab(t.key)} className={`flex-1 px-3 py-2 text-sm font-medium flex items-center justify-center gap-1 ${activeTab === t.key ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600'}`}>{t.icon}<span className="hidden sm:inline">{t.label}</span></button>))}
+      </div>
+
+      {(isAnalyzing || analysisQueue.length > 0) && (<div className="bg-yellow-50 px-3 py-2 flex items-center gap-2 text-sm"><Sparkles className="w-4 h-4 text-yellow-600 animate-pulse" /><span className="text-yellow-800">解析中... (キュー: {analysisQueue.length}件)</span></div>)}
+      {parseErrors.length > 0 && debugMode && (<div className="bg-red-50 px-3 py-2 text-sm text-red-800"><AlertCircle className="w-4 h-4 inline mr-1" />パースエラー: {parseErrors.length}件</div>)}
+
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'chat' ? (
+          <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3">
+              {messages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] md:max-w-[70%] rounded-lg px-3 py-2 ${msg.type === 'user' ? 'bg-blue-600 text-white' : 'bg-white border'}`}>
+                      <div className="text-xs opacity-70 mb-1">Turn {msg.turn}</div>
+                      <MessageDisplay content={msg.content} who={msg.type} />
+                      {msg.type === 'bot' && msg.headline && (<div className="mt-2 text-xs bg-white/70 text-gray-700 rounded px-2 py-1 border">要約: {msg.headline}</div>)}
+                    </div>
+                  </div>
+              ))}
+              {isLoading && (<div className="flex justify-start"><div className="bg-white border rounded-lg px-4 py-2"><Loader className="w-4 h-4 animate-spin" /></div></div>)}
+              <div ref={messagesEndRef} />
+            </div>
+            <div className="border-t bg-white p-3 md:p-4">
+              <div className="flex gap-2">
+                <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} placeholder="メッセージを入力..." className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500 text-sm" disabled={isLoading} />
+                <button onClick={sendMessage} disabled={isLoading || !input.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"><Send className="w-4 h-4" /></button>
+              </div>
+            </div>
+          </div>
+        ) : activeTab === 'nodes' ? (
+          <div className="h-full overflow-y-auto p-3 md:p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+              {Object.entries(typeStats).map(([type, count]) => (<div key={type} className="bg-white p-2 rounded border text-sm"><div className="text-xs text-gray-600">{ID_PREFIXES[type]?.split('/')[1] || type}</div><div className="font-bold">{count as number}</div></div>))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Array.from(nodeRegistry.values()).sort((a, b) => b.occurrences - a.occurrences).map((node) => (<div key={node.id} onClick={() => { setSelectedNodeId(node.id); setShowNodeDetails(true); }} className="bg-white rounded-lg border p-3 cursor-pointer hover:border-blue-400"><div className="flex items-start justify-between mb-2"><div className="font-mono text-sm text-blue-600">{node.name ? `<${node.name}#${node.id}>` : `<#${node.id}>`}</div><div className="text-xs bg-gray-100 px-2 py-1 rounded">×{node.occurrences}</div></div><div className="text-xs text-gray-600"><div style={{color: typeColor(node.type)}}>{ID_PREFIXES[node.type] || node.type}</div><div>T{node.firstTurn}-{node.lastTurn}</div>{node.edges.length > 0 && <div className="mt-1">関係: {node.edges.length}件</div>}</div></div>))}
+            </div>
+          </div>
+        ) : activeTab === 'parsed' ? (
+          <div className="h-full overflow-y-auto p-4 space-y-4">
+            {Object.entries(parsedData).filter(([key]) => key.startsWith('$')).map(([key, values]) => (<div key={key} className="mb-4"><h4 className="font-medium text-green-600 mb-2">{key}</h4>{(values as any[]).length === 0 ? (<p className="text-gray-400 text-sm">データなし</p>) : (<div className="space-y-1 max-h-40 overflow-y-auto">{(values as any[]).map((item, idx) => (<div key={idx} className="bg-gray-50 p-2 rounded text-sm"><span className="text-gray-600">T{item.turn}</span><span className="mx-2">→</span><span className="text-gray-800">{item.value}</span></div>))}</div>)}</div>))}
+          </div>
+        ) : ( // flow tab
+          <div className="h-full overflow-y-auto p-4">
+            <div className="space-y-4">
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-sm text-green-900"><strong>AI処理フロー</strong>（意図分析→関連検索→履歴編集→応答生成）</div>
+              {messages.filter((m) => m.type === 'bot' && m.metadata).map((msg) => (
+                <div key={msg.id} className="bg-white p-4 rounded-lg shadow">
+                  <div className="font-semibold text-gray-800 mb-3">Turn {msg.turn}</div>
+                  <div className="mb-4 pl-4 border-l-4 border-blue-400"><div className="font-medium text-blue-800">AI-A: 意図分析</div><pre className="text-xs bg-gray-50 p-2 rounded mt-1 whitespace-pre-wrap">{JSON.stringify(msg.metadata.intentAnalysis, null, 2)}</pre></div>
+                  {msg.metadata.searchResult && (<div className="mb-4 pl-4 border-l-4 border-green-400"><div className="font-medium text-green-800">AI-B: 関連検索</div><pre className="text-xs bg-gray-50 p-2 rounded mt-1 whitespace-pre-wrap">{JSON.stringify(msg.metadata.searchResult, null, 2)}</pre></div>)}
+                  <div className="pl-4 border-l-4 border-indigo-400"><div className="font-medium text-indigo-800">AI-C: 応答生成</div><div className="text-sm">使用した履歴ターン: {(msg.metadata.customHistoryTurns || []).join(', ')}</div></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <NodeDetailsModal />
+    </div>
+  );
+}
+
