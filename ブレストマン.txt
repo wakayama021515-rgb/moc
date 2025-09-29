@@ -1,0 +1,1066 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, Settings, Brain, Users, Award, ChevronDown, ChevronUp, Loader2, Layers, Eye, EyeOff, AlertCircle, List, Zap, RefreshCw, GitBranch, Sparkles, Download, Database, BarChart, Plus, Trash2, Shuffle, Target, Activity, Clock, FileText, Network, Grid3x3, TrendingUp, Compass, Package, Lightbulb, Combine } from 'lucide-react';
+
+const AIEconomySystemV4 = () => {
+  // グローバル設定
+  const [globalWish, setGlobalWish] = useState('チャーハンレシピの開発');
+  const [background, setBackground] = useState('マーボーチャーハンの新鮮さを再び');
+  
+  // 観点マスターリスト
+  const perspectives = [
+    { id: 'direct', name: '直球', prompt: '直接的に解決する要素' },
+    { id: 'traditional', name: '伝統', prompt: '歴史的に証明された手法' },
+    { id: 'trends', name: 'トレンド', prompt: '最新トレンド、最新技術' },
+    { id: 'emotion', name: '感情', prompt: '感情体験、コミュニティ' },
+    { id: 'problem', name: '課題', prompt: '問題点、ペインポイント' },
+    { id: 'ideal', name: '理想', prompt: '隠れた願望、理想的な未来' },
+    { id: 'improvement', name: '改善', prompt: '既存のものを改善' },
+    { id: 'fusion', name: '融合', prompt: '異分野からの要素' },
+    { id: 'chaos', name: 'カオス', prompt: 'ランダムで異分野な要素' }
+  ];
+
+  // エージェントタイプ（SCAMPER統合）
+  const layer2Types = [
+    { id: 'substitute', name: 'S:代替', description: '要素を別のものに置き換える' },
+    { id: 'combine', name: 'C:結合', description: '複数の要素を組み合わせる' },
+    { id: 'adapt', name: 'A:適応', description: '他分野から適応させる' },
+    { id: 'modify', name: 'M:修正/拡大', description: '修正・拡大・縮小する' },
+    { id: 'put-other', name: 'P:転用', description: '別の用途に転用する' },
+    { id: 'eliminate', name: 'E:削除', description: '不要な要素を削除する' },
+    { id: 'reverse', name: 'R:逆転', description: '逆転・再配置する' },
+    { id: 'random', name: 'ランダム', description: 'ランダムSCAMPER' },
+    { id: 'free', name: 'フリー', description: '自由発想' }
+  ];
+
+  // 構造化手法（L3層）
+  const structuringMethods = [
+    { id: 'edge-graph', name: 'エッジグラフ', description: '関係性をグラフ構造で分析', icon: Network },
+    { id: 'matrix', name: 'マトリクス', description: '相関マトリクスで分析', icon: Grid3x3 },
+    { id: 'multi-index', name: '多軸インデックス', description: '多次元で分類・整理', icon: BarChart },
+    { id: 'clustering', name: 'クラスタリング', description: '類似度でグルーピング', icon: GitBranch },
+    { id: 'hierarchy', name: '階層構造', description: '階層的に整理', icon: List },
+    { id: 'network', name: 'ネットワーク', description: 'ネットワーク分析', icon: Sparkles }
+  ];
+
+  const layer4Criteria = [
+    { id: 'effective', name: '有効×実現', description: '実用的で実現可能' },
+    { id: 'unique', name: '独創×実現', description: '独創的で実現可能' },
+    { id: 'bizarre', name: '奇抜×長期', description: '奇抜で長期的価値' },
+    { id: 'synergy', name: 'シナジー', description: '相乗効果が高い' },
+    { id: 'disruptive', name: '破壊的', description: '既存の枠組みを破壊' }
+  ];
+
+  const evaluationCriteria = [
+    { id: 'feasibility', name: '実現可能性' },
+    { id: 'innovation', name: '革新性' },
+    { id: 'user-value', name: 'ユーザー価値' },
+    { id: 'technical', name: '技術的優位性' },
+    { id: 'sustainability', name: '持続可能性' },
+    { id: 'cost', name: 'コスト効率' }
+  ];
+
+  // 層別エージェント設定
+  const [layer1Agents, setLayer1Agents] = useState([
+    { id: 'l1-1', perspectives: ['direct', 'problem'] },
+    { id: 'l1-2', perspectives: ['trends', 'ideal'] }
+  ]);
+
+  const [layer2Agents, setLayer2Agents] = useState([
+    { id: 'l2-1', type: 'substitute', entityCount: 8 },
+    { id: 'l2-2', type: 'combine', entityCount: 8 },
+    { id: 'l2-3', type: 'adapt', entityCount: 8 }
+  ]);
+
+  const [layer3Agents, setLayer3Agents] = useState([
+    { id: 'l3-1', method: 'edge-graph' },
+    { id: 'l3-2', method: 'clustering' }
+  ]);
+
+  const [layer4Agents, setLayer4Agents] = useState([
+    { id: 'l4-1', criteria: 'effective' },
+    { id: 'l4-2', criteria: 'synergy' }
+  ]);
+
+  const [layer5Agents, setLayer5Agents] = useState([
+    { id: 'l5-1', criteria: 'feasibility' },
+    { id: 'l5-2', criteria: 'innovation' }
+  ]);
+
+  const [layer2Iterations, setLayer2Iterations] = useState(2);
+  const [batchSize, setBatchSize] = useState(2); 
+  const [apiDelay, setApiDelay] = useState(1000); 
+  
+  // 処理状態
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState('idle');
+  const [currentIteration, setCurrentIteration] = useState(0);
+  const [logs, setLogs] = useState([]);
+  const [activeRequests, setActiveRequests] = useState(0);
+  const logsEndRef = useRef(null);
+  
+  // 結果データ
+  const [baseAnalysis, setBaseAnalysis] = useState(null);
+  const [allEntities, setAllEntities] = useState([]);
+  const [layer1Results, setLayer1Results] = useState([]);
+  const [layer2Results, setLayer2Results] = useState([]);
+  const [layer2IterationHistory, setLayer2IterationHistory] = useState([]);
+  const [layer3Results, setLayer3Results] = useState([]);
+  const [layer4Results, setLayer4Results] = useState([]);
+  const [evaluations, setEvaluations] = useState([]);
+  const [finalReport, setFinalReport] = useState(null);
+  
+  // API通信履歴
+  const [apiHistory, setApiHistory] = useState([]);
+  
+  // UI状態
+  const [showSettings, setShowSettings] = useState(true);
+  const [showApiHistory, setShowApiHistory] = useState(false);
+  const [showBaseAnalysis, setShowBaseAnalysis] = useState(true);
+  const [showEntities, setShowEntities] = useState(true);
+  const [showIdeas, setShowIdeas] = useState(true);
+  const [showStructures, setShowStructures] = useState(true);
+  const [showSolutions, setShowSolutions] = useState(true);
+
+  const [expandedApiHistory, setExpandedApiHistory] = useState(new Set());
+  const [expandedStructures, setExpandedStructures] = useState(new Set());
+  const [randomSeed, setRandomSeed] = useState(Date.now());
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
+
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const mulberry32 = (seed) => {
+    return function() {
+      let t = (seed += 0x6D2B79F5);
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+
+  const sampleUnique = (arr, k, rng = Math.random) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a.slice(0, Math.min(k, a.length));
+  };
+
+  const addLog = (message, type = 'info') => {
+    const timestamp = new Date().toLocaleTimeString('ja-JP');
+    setLogs(prev => [...prev.slice(-100), { message, type, timestamp }]);
+  };
+
+  const addApiHistory = (request, response, error = null) => {
+    const entry = {
+      id: `api-${Date.now()}-${Math.random()}`,
+      timestamp: new Date().toISOString(),
+      request,
+      response,
+      error,
+      success: !error
+    };
+    setApiHistory(prev => [...prev, entry]);
+    return entry;
+  };
+
+  const executeBatch = async (tasks, batchSize = 3, delayMs = 500) => {
+    const results = [];
+    for (let i = 0; i < tasks.length; i += batchSize) {
+      const batch = tasks.slice(i, i + batchSize);
+      const batchPromises = batch.map(async (task, index) => {
+        setActiveRequests(prev => prev + 1);
+        try {
+          if (i > 0 || index > 0) await delay(delayMs);
+          return await task();
+        } finally {
+          setActiveRequests(prev => prev - 1);
+        }
+      });
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults);
+    }
+    return results;
+  };
+
+  const callGeminiAPI = async (messages, maxRetries = 2, maxTokens = 8000) => {
+    const apiKey = "";
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+    const promptText = messages.map(msg => msg.content).join('\n\n');
+    const requestData = {
+      contents: [{ parts: [{ text: promptText }] }],
+      generationConfig: { responseMimeType: "application/json", maxOutputTokens: maxTokens, temperature: 0.7 }
+    };
+    let lastError = null;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 1) {
+          const waitTime = Math.min(Math.pow(2, attempt) * 1000, 10000);
+          addLog(`⏳ リトライ ${attempt}/${maxRetries}: ${waitTime/1000}秒待機`, 'warning');
+          await delay(waitTime);
+        }
+        const response = await fetch(apiUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestData) });
+        if (response.status === 429) throw new Error('Rate limit exceeded.');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || `API error: ${response.status}`);
+        const candidate = data.candidates?.[0];
+        if (candidate && candidate.content?.parts?.[0]?.text) {
+          const responseText = candidate.content.parts[0].text;
+          try {
+            const parsedResponse = JSON.parse(responseText);
+            addApiHistory(requestData, parsedResponse);
+            return parsedResponse;
+          } catch (parseError) {
+            addLog(`❌ JSONパースエラー: ${parseError.message}`, 'error');
+            addLog(`RAWレスポンス全文:\n\`\`\`\n${responseText}\n\`\`\``, 'info');
+            throw new Error(`Failed to parse API response as JSON. Details: ${parseError.message}`);
+          }
+        } else {
+          const finishReason = candidate?.finishReason || "No candidate found";
+          const safetyRatings = JSON.stringify(candidate?.safetyRatings || "N/A");
+          throw new Error(`API returned no content. Finish reason: ${finishReason}, Safety ratings: ${safetyRatings}`);
+        }
+      } catch (error) {
+        lastError = error;
+        addLog(`❌ APIコールエラー (試行 ${attempt}/${maxRetries}): ${error.message}`, 'error');
+      }
+    }
+    addApiHistory(requestData, null, lastError.message);
+    throw lastError;
+  };
+
+  const addLayer1Agent = () => {
+    const newId = `l1-${Date.now()}`;
+    setLayer1Agents(prev => [...prev, { id: newId, perspectives: ['direct'] }]);
+  };
+  const removeLayer1Agent = (id) => {
+    if (layer1Agents.length > 1) setLayer1Agents(prev => prev.filter(a => a.id !== id));
+  };
+  const updateLayer1Agent = (id, perspectives) => {
+    setLayer1Agents(prev => prev.map(a => a.id === id ? {...a, perspectives} : a));
+  };
+  const addLayer2Agent = () => {
+    const newId = `l2-${Date.now()}`;
+    setLayer2Agents(prev => [...prev, { id: newId, type: 'random', entityCount: 8 }]);
+  };
+  const removeLayer2Agent = (id) => {
+    if (layer2Agents.length > 1) setLayer2Agents(prev => prev.filter(a => a.id !== id));
+  };
+  const updateLayer2Agent = (id, type, entityCount) => {
+    setLayer2Agents(prev => prev.map(a => a.id === id ? {...a, type, entityCount} : a));
+  };
+  const addLayer3Agent = () => {
+    const newId = `l3-${Date.now()}`;
+    setLayer3Agents(prev => [...prev, { id: newId, method: 'edge-graph' }]);
+  };
+  const removeLayer3Agent = (id) => {
+    if (layer3Agents.length > 1) setLayer3Agents(prev => prev.filter(a => a.id !== id));
+  };
+  const updateLayer3Agent = (id, method) => {
+    setLayer3Agents(prev => prev.map(a => a.id === id ? {...a, method} : a));
+  };
+  const addLayer4Agent = () => {
+    const newId = `l4-${Date.now()}`;
+    setLayer4Agents(prev => [...prev, { id: newId, criteria: 'effective' }]);
+  };
+  const removeLayer4Agent = (id) => {
+    if (layer4Agents.length > 1) setLayer4Agents(prev => prev.filter(a => a.id !== id));
+  };
+  const updateLayer4Agent = (id, criteria) => {
+    setLayer4Agents(prev => prev.map(a => a.id === id ? {...a, criteria} : a));
+  };
+  const addLayer5Agent = () => {
+    const newId = `l5-${Date.now()}`;
+    setLayer5Agents(prev => [...prev, { id: newId, criteria: 'feasibility' }]);
+  };
+  const removeLayer5Agent = (id) => {
+    if (layer5Agents.length > 1) setLayer5Agents(prev => prev.filter(a => a.id !== id));
+  };
+  const updateLayer5Agent = (id, criteria) => {
+    setLayer5Agents(prev => prev.map(a => a.id === id ? {...a, criteria} : a));
+  };
+
+  const executeLayer0 = async (wish, bg) => {
+    setCurrentPhase('layer0');
+    addLog(`🚀 ========== 第0層開始（ベース分析） ==========`, 'process');
+    try {
+      const result = await callGeminiAPI([{
+        role: "user",
+        content: `
+          あなたは王道的なコンサルタントにしてメンター、良き相談役です。
+          【願い】${wish}
+          【背景】${bg}
+          願いと背景をベースにユーザーが求めているものを理解し、現実的な分析を作成しなさい。
+          以下の観点で包括的な分析を行ってください：
+          必ず以下のJSON形式で応答してください:
+          {
+            "contextUnderstanding": "ユーザーの真のニーズの理解（50-100文字）",
+            "orthodoxApproach": [ { "title": "...", "description": "...", "rationale": "..." } ],
+            "commonChallenges": [ { "challenge": "...", "impact": "...", "mitigation": "..." } ],
+            "commonFailures": [ { "failure": "...", "cause": "...", "prevention": "..." } ],
+            "classicalTechniques": [ { "technique": "...", "principle": "...", "application": "..." } ],
+            "avoidList": [ { "avoid": "...", "reason": "...", "alternative": "..." } ],
+            "fundamentalGoals": [ { "goal": "...", "value": "...", "metrics": "..." } ],
+            "strategicDirection": { "primaryFocus": "...", "secondaryFocus": "...", "longTermVision": "..." },
+            "realityCheck": { "feasibilityScore": 85, "timeframe": "...", "resourceRequirements": "...", "criticalSuccessFactors": ["..."] }
+          }
+        `
+      }]);
+      setBaseAnalysis(result);
+      addLog(`✅ ベース分析完了`, 'success');
+      return result;
+    } catch (error) {
+      addLog(`❌ ベース分析エラー: ${error.message}`, 'error');
+      throw error;
+    }
+  };
+
+  const executeLayer1 = async (wish, bg, agents) => {
+    setCurrentPhase('layer1');
+    addLog(`🚀 ========== 第1層開始 ==========`, 'process');
+    const tasks = agents.map((agent, index) => async () => {
+      try {
+        const selectedPerspectives = agent.perspectives.map(id => perspectives.find(p => p.id === id));
+        const result = await callGeminiAPI([{
+          role: "user",
+          content: `
+            エンティティ生成エージェント${index + 1}
+            グローバルWish: ${wish}
+            背景: ${bg}
+            観点: ${selectedPerspectives.map(p => p.name).join(', ')}
+            上記の観点に忠実に従い、Wishと背景に関連する20個のエンティティを生成してください。
+            必ず以下のJSON形式で応答してください:
+            { "agentId": "gen-${index + 1}", "entities": [ { "id": "e${index + 1}-1", "name": "...", "description": "...", "category": "..." } ] }
+          `
+        }]);
+        addLog(`✅ エージェント${index + 1}: ${result.entities.length}個生成完了`, 'success');
+        return result;
+      } catch (error) {
+        addLog(`❌ エージェント${index + 1}: エラー`, 'error');
+        return null;
+      }
+    });
+    const results = await executeBatch(tasks, batchSize, apiDelay);
+    const validResults = results.filter(r => r);
+    const allEntitiesList = validResults.flatMap(r => r.entities);
+    setLayer1Results(validResults);
+    setAllEntities(allEntitiesList);
+    addLog(`📊 第1層完了: 計${allEntitiesList.length}個のエンティティ`, 'success');
+    return { results: validResults, allEntities: allEntitiesList };
+  };
+
+  const executeLayer2Iteration = async (wish, bg, agents, entities, iteration, previousIdeas, baseAnalysis) => {
+    setCurrentIteration(iteration);
+    addLog(`🔄 --- 第2層 反復${iteration}/${layer2Iterations} (SCAMPER) ---`, 'process');
+    const rng = mulberry32(randomSeed + iteration);
+    const baseGuidance = baseAnalysis ? `
+      【ベース分析からの指針】
+      - 王道アプローチ: ${baseAnalysis.orthodoxApproach.map(a => a.title).join(', ')}
+      - よくある課題: ${baseAnalysis.commonChallenges.map(c => c.challenge).join(', ')}
+      - 避けるべきこと: ${baseAnalysis.avoidList.map(a => a.avoid).join(', ')}
+      - 古典的手法: ${baseAnalysis.classicalTechniques.map(t => t.technique).join(', ')}
+      - 基本目標: ${baseAnalysis.fundamentalGoals.map(g => g.goal).join(', ')}
+      これらの洞察を活かしてアイデアを生成してください。` : '';
+    const tasks = agents.map((agent, index) => async () => {
+      try {
+        let scamperInstruction = '';
+        const selectedEntities = sampleUnique(entities, agent.entityCount || 8, rng);
+        switch(agent.type) {
+          case 'substitute': scamperInstruction = `SCAMPER手法の「Substitute（代替）」を適用：既存の要素を別のもので置き換える。選択エンティティ: ${selectedEntities.map(e => e.name).join(', ')}`; break;
+          case 'combine': scamperInstruction = `SCAMPER手法の「Combine（結合）」を適用：複数のアイデアや機能を組み合わせる。選択エンティティ: ${selectedEntities.map(e => e.name).join(', ')}`; break;
+          case 'adapt': scamperInstruction = `SCAMPER手法の「Adapt（適応）」を適用：他の分野や文脈から適応させる。選択エンティティ: ${selectedEntities.map(e => e.name).join(', ')}`; break;
+          case 'modify': scamperInstruction = `SCAMPER手法の「Modify/Magnify（修正/拡大）」を適用：サイズ、形、色を変更する。選択エンティティ: ${selectedEntities.map(e => e.name).join(', ')}`; break;
+          case 'put-other': scamperInstruction = `SCAMPER手法の「Put to other uses（転用）」を適用：別の用途や市場に転用する。選択エンティティ: ${selectedEntities.map(e => e.name).join(', ')}`; break;
+          case 'eliminate': scamperInstruction = `SCAMPER手法の「Eliminate（削除）」を適用：不必要な要素を取り除く。選択エンティティ: ${selectedEntities.map(e => e.name).join(', ')}`; break;
+          case 'reverse': scamperInstruction = `SCAMPER手法の「Reverse/Rearrange（逆転/再配置）」を適用：順序やプロセスを逆転させる。選択エンティティ: ${selectedEntities.map(e => e.name).join(', ')}`; break;
+          case 'random': 
+            const scamperMethods = ['Substitute', 'Combine', 'Adapt', 'Modify', 'Put to other uses', 'Eliminate', 'Reverse'];
+            const selectedMethods = sampleUnique(scamperMethods, 3, rng);
+            scamperInstruction = `SCAMPER手法の複数技法をランダムに適用：使用技法: ${selectedMethods.join(', ')}。選択エンティティ: ${selectedEntities.map(e => e.name).join(', ')}`; 
+            break;
+          case 'free': scamperInstruction = `自由発想型（反復${iteration}）。グローバルWish: ${wish}。参考エンティティ: ${entities.slice(0, 5).map(e => e.name).join(', ')}`; break;
+          default: scamperInstruction = `選択エンティティを活用: ${selectedEntities.map(e => e.name).join(', ')}`;
+        }
+        let previousReference = '';
+        if (iteration > 1 && previousIdeas.length > 0) {
+          const otherIdeas = previousIdeas.filter(a => a && a.agentId && !a.agentId.includes(`idea-${index + 1}`)).flatMap(a => a.ideas || []).slice(0, 2);
+          if (otherIdeas.length > 0) {
+            previousReference = `\n\n前回の他エージェントのアイデア（参考）:\n${otherIdeas.map(i => `- ${i.title}`).join('\n')}`;
+          }
+        }
+        const result = await callGeminiAPI([{
+          role: "user",
+          content: `
+            SCAMPER手法によるアイデア生成エージェント${index + 1}
+            グローバルWish: ${wish}
+            背景: ${bg}
+            ${scamperInstruction}
+            ${previousReference}
+            ${baseGuidance}
+            【重要な制約条件】
+            あなたは理想を現実に変えるプロフェッショナルコンサルタントです。
+            - 現状（As-Is）の制約と基礎を前提として考えること
+            - 実現可能性と実用性を重視すること
+            - 既存のリソース、技術、インフラを活用すること
+            - 段階的な実装が可能な現実的なアプローチを取ること
+            - 費用対効果を常に意識すること
+            上記の制約とベース分析の洞察に基づき、実現可能な2つのアイデアを生成してください。
+            必ず以下のJSON形式で応答してください:
+            { "agentId": "idea-${index + 1}-i${iteration}", "agentType": "${agent.type}", "scamperMethod": "${agent.type}", "iteration": ${iteration}, "usedEntities": ${JSON.stringify(selectedEntities.map(e => e.name))}, "ideas": [ { "id": "i${index + 1}-${iteration}-1", "title": "...", "description": "...", "scamperApplication": "...", "asIsBasis": "...", "implementationSteps": "...", "expectedROI": "...", "selfEvaluation": { "feasibility": 80, "innovation": 60, "practicality": 90, "costEffectiveness": 75 } } ] }
+          `
+        }]);
+        addLog(`✅ Agent${index + 1}(${agent.type}): ${result.ideas.length}個生成`, 'success');
+        return result;
+      } catch (error) {
+        addLog(`❌ Agent${index + 1}: エラー`, 'error');
+        return null;
+      }
+    });
+    const results = await executeBatch(tasks, batchSize, apiDelay);
+    return results.filter(r => r);
+  };
+
+  const executeLayer2 = async (wish, bg, agents, entities, baseAnalysis) => {
+    setCurrentPhase('layer2');
+    addLog(`🚀 ========== 第2層開始 ==========`, 'process');
+    let currentResults = [];
+    for (let iter = 1; iter <= layer2Iterations; iter++) {
+      const iterationResults = await executeLayer2Iteration(wish, bg, agents, entities, iter, currentResults, baseAnalysis);
+      setLayer2IterationHistory(prev => [...prev, { iteration: iter, results: iterationResults }]);
+      currentResults = iterationResults;
+    }
+    setLayer2Results(currentResults);
+    const totalIdeas = currentResults.reduce((sum, r) => sum + (r && r.ideas ? r.ideas.length : 0), 0);
+    addLog(`📊 第2層完了: 計${totalIdeas}個のアイデア`, 'success');
+    return currentResults;
+  };
+  
+  const executeLayer3 = async (agents, entities, ideas) => {
+    setCurrentPhase('layer3');
+    addLog(`🚀 ========== 第3層開始（構造化） ==========`, 'process');
+    const allIdeas = ideas.flatMap(agent => (agent && agent.ideas) ? agent.ideas : []);
+    const tasks = agents.map((agent, index) => async () => {
+      try {
+        const methodObj = structuringMethods.find(m => m.id === agent.method);
+        let structuringPrompt = '';
+        switch(agent.method) {
+          case 'edge-graph': structuringPrompt = `エッジグラフ構造化：エンティティとアイデア間の関係性をグラフとして分析し、中心性やクラスターを計算。`; break;
+          case 'matrix': structuringPrompt = `マトリクス構造化：エンティティ×アイデアの相関マトリクスを作成し、類似度や依存度をスコア化。`; break;
+          case 'multi-index': structuringPrompt = `多軸インデックス構造化：実現性、革新性、市場性などの軸で分類し、ポジショニングを明確化。`; break;
+          case 'clustering': structuringPrompt = `クラスタリング構造化：類似度ベースでグループ化し、K-means的な中心点を発見。`; break;
+          case 'hierarchy': structuringPrompt = `階層構造化：上位概念と下位概念の階層を構築し、ツリー構造で体系化。`; break;
+          case 'network': structuringPrompt = `ネットワーク構造化：複雑ネットワーク理論で分析し、ハブノードと情報伝播経路を最適化。`; break;
+        }
+        const result = await callGeminiAPI([{
+          role: "user",
+          content: `
+            構造化・分析エージェント${index + 1}
+            手法: ${methodObj.name} - ${methodObj.description}
+            【分析の前提】
+            実装可能性と現実性を重視した構造分析を行ってください。
+            ${structuringPrompt}
+            分析対象：
+            エンティティ（抜粋）: ${entities.slice(0, 15).map(e => e.name).join(', ')}
+            アイデア（抜粋）: ${allIdeas.slice(0, 10).map(i => i.title).join(', ')}
+            【分析の制約】
+            重要なパターン、グループ、関係性を3つ発見してください。
+            必ず以下のJSON形式で応答してください:
+            { "agentId": "struct-${index + 1}", "method": "${agent.method}", "structuredData": [ { "id": "struct-${index + 1}-1", "type": "...", "name": "...", "description": "...", "components": ["..."], "relationships": "...", "strength": 80, "insights": "...", "integrationHint": "...", "realWorldExample": "..." } ], "keyFindings": [ { "finding": "...", "implication": "...", "actionableInsight": "..." } ], "recommendations": ["..."] }
+          `
+        }]);
+        addLog(`✅ 構造化Agent${index + 1}: ${result.structuredData.length}個の構造を発見`, 'success');
+        return result;
+      } catch (error) {
+        addLog(`❌ 構造化Agent${index + 1}: エラー`, 'error');
+        return null;
+      }
+    });
+    const results = await executeBatch(tasks, batchSize, apiDelay);
+    const validResults = results.filter(r => r);
+    setLayer3Results(validResults);
+    addLog(`📊 第3層完了`, 'success');
+    return validResults;
+  };
+  
+  const executeLayer4 = async (agents, wish, entities, ideas, structuredData) => {
+    setCurrentPhase('layer4');
+    addLog(`🚀 ========== 第4層開始（収束） ==========`, 'process');
+    const allIdeas = ideas.flatMap(agent => (agent && agent.ideas) ? agent.ideas : []);
+    const tasks = agents.map((agent, index) => async () => {
+      try {
+        const criteriaObj = layer4Criteria.find(c => c.id === agent.criteria);
+        let structuredSummary = '';
+        if (structuredData && structuredData.length > 0) {
+          const structures = structuredData.flatMap(s => (s && s.structuredData) ? s.structuredData : []);
+          const findings = structuredData.flatMap(s => (s && s.keyFindings) ? s.keyFindings : []);
+          const integrationHints = structures.filter(s => s.integrationHint).map(s => s.integrationHint);
+          structuredSummary = `
+            発見された構造パターン: ${structures.slice(0, 5).map(s => `- ${s.name}: ${s.description}`).join('\n')}
+            重要な洞察: ${findings.slice(0, 3).map(f => `- ${f.finding}: ${f.actionableInsight || f.implication}`).join('\n')}
+            統合のヒント: ${integrationHints.slice(0, 3).map(h => `- ${h}`).join('\n')}
+            これらの構造分析を必ず活用して、より効果的な統合案を作成してください。
+          `;
+        }
+        const result = await callGeminiAPI([{
+          role: "user",
+          content: `
+            収束・統合エージェント${index + 1}
+            グローバルWish: ${wish}
+            評価軸: ${criteriaObj.name}
+            エンティティ（抜粋）: ${entities.slice(0, 10).map(e => `- ${e.name}`).join('\n')}
+            アイデア（抜粋）: ${allIdeas.slice(0, 10).map(i => `- ${i.title}`).join('\n')}
+            ${structuredSummary}
+
+            【最重要制約：クリティカル・アンサー】
+            これまでのエンティティ、アイデア、構造分析をすべて踏まえた上で、単なるアイデアのまとめに留まらず、ユーザーの「Wish」に対する最も直接的で本質を突いた「答え」となるような、鋭い統合案を作成してください。表層的な解決策ではなく、核心的な価値提案をすること。
+
+            上記の制約に基づき、Wishに最適な統合案を2つ作成してください。
+            必ず以下のJSON形式で応答してください:
+            { "agentId": "conv-${index + 1}", "criteria": "${criteriaObj.name}", "solutions": [ { "id": "sol-${index + 1}-1", "title": "...", "description": "...", "uniqueness": "...", "structureUtilized": "...", "practicalBasis": "...", "quickWin": "...", "synergy": "...", "executionPlan": { "phase1": "...", "phase2": "...", "phase3": "..." }, "expectedOutcome": "...", "adaptation": "..." } ] }
+          `
+        }]);
+        addLog(`✅ 収束Agent${index + 1}: ${result.solutions.length}個生成`, 'success');
+        return result;
+      } catch (error) {
+        addLog(`❌ 収束Agent${index + 1}: エラー`, 'error');
+        return null;
+      }
+    });
+    const results = await executeBatch(tasks, batchSize, apiDelay);
+    const validResults = results.filter(r => r);
+    setLayer4Results(validResults);
+    addLog(`📊 第4層完了`, 'success');
+    return validResults;
+  };
+
+  const executeLayer5 = async (agents, ideas, solutions) => {
+    setCurrentPhase('layer5');
+    addLog(`🚀 ========== 第5層開始 ==========`, 'process');
+    const allIdeas = ideas.flatMap(agent => (agent && agent.ideas) ? agent.ideas.map(i => ({...i, type: 'idea'})) : []);
+    const allSolutions = solutions.flatMap(agent => (agent && agent.solutions) ? agent.solutions.map(s => ({...s, type: 'solution'})) : []);
+    const targets = [...allIdeas, ...allSolutions].slice(0, 15);
+    const tasks = agents.map((agent, index) => async () => {
+      try {
+        const criteriaObj = evaluationCriteria.find(c => c.id === agent.criteria);
+        const result = await callGeminiAPI([{
+          role: "user",
+          content: `
+            評価エージェント${index + 1}
+            評価基準: ${criteriaObj.name}
+            以下を1-100点で評価:
+            ${targets.map((t, i) => `${i + 1}. [${t.id}] ${t.title} (${t.type})`).join('\n')}
+            必ず以下のJSON形式で応答してください:
+            { "evaluatorId": "eval-${index + 1}", "criteria": "${criteriaObj.name}", "evaluations": [ { "targetId": "...", "score": 88, "reason": "..." } ] }
+          `
+        }]);
+        addLog(`✅ 評価Agent${index + 1}: ${result.evaluations.length}件評価`, 'success');
+        return result;
+      } catch (error) {
+        addLog(`❌ 評価Agent${index + 1}: エラー`, 'error');
+        return null;
+      }
+    });
+    const results = await executeBatch(tasks, batchSize, apiDelay);
+    const validResults = results.filter(r => r);
+    setEvaluations(validResults);
+    addLog(`📊 第5層完了`, 'success');
+    return { evaluations: validResults, targets };
+  };
+
+  const generateFinalReport = (targets, evaluations) => {
+    const scoreMap = {};
+    targets.forEach(target => {
+      scoreMap[target.id] = { target, scores: [], evaluatorDetails: [], average: 0 };
+    });
+    evaluations.forEach(evaluator => {
+      if (evaluator && evaluator.evaluations) {
+        evaluator.evaluations.forEach(ev => {
+          if (scoreMap[ev.targetId]) {
+            scoreMap[ev.targetId].scores.push(ev.score || 0);
+            scoreMap[ev.targetId].evaluatorDetails.push({
+              evaluatorId: evaluator.evaluatorId,
+              criteria: evaluator.criteria,
+              score: ev.score || 0,
+              reason: ev.reason || ''
+            });
+          }
+        });
+      }
+    });
+    Object.values(scoreMap).forEach(item => {
+      if (item.scores.length > 0) {
+        item.average = item.scores.reduce((a, b) => a + b, 0) / item.scores.length;
+      }
+    });
+    const ranking = Object.values(scoreMap)
+      .filter(item => item.scores.length > 0)
+      .sort((a, b) => b.average - a.average);
+    setFinalReport({ ranking, totalTargets: targets.length, totalEvaluators: evaluations.length });
+    setCurrentPhase('complete');
+    addLog(`🎉 ========== 完了 ==========`, 'success');
+  };
+
+  const exportToJSON = () => {
+    const data = {
+      metadata: { timestamp: new Date().toISOString(), globalWish, background, settings: { layer1Agents, layer2Agents, layer3Agents, layer4Agents, layer5Agents, layer2Iterations, batchSize, apiDelay, randomSeed } },
+      baseAnalysis,
+      entities: allEntities,
+      layer1Results,
+      layer2Results,
+      layer2IterationHistory,
+      layer3Results,
+      layer4Results,
+      evaluations,
+      finalReport,
+      apiHistory,
+      logs
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ai-system-gemini-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    addLog('💾 JSONエクスポート完了', 'success');
+  };
+
+  const runSystem = async () => {
+    setIsProcessing(true);
+    setLogs([]);
+    setFinalReport(null);
+    setBaseAnalysis(null);
+    setAllEntities([]);
+    setLayer1Results([]);
+    setLayer2Results([]);
+    setLayer2IterationHistory([]);
+    setLayer3Results([]);
+    setLayer4Results([]);
+    setEvaluations([]);
+    setApiHistory([]);
+    setActiveRequests(0);
+    setCurrentIteration(0);
+    
+    addLog('🚀 ========== システム起動 (Gemini版) ==========', 'info');
+    
+    try {
+      const baseResult = await executeLayer0(globalWish, background);
+      if (!baseResult) throw new Error('ベース分析失敗');
+      
+      await delay(1000);
+      
+      const layer1Result = await executeLayer1(globalWish, background, layer1Agents);
+      if (!layer1Result.allEntities?.length) throw new Error('エンティティ生成失敗');
+      
+      const layer2Result = await executeLayer2(globalWish, background, layer2Agents, layer1Result.allEntities, baseResult);
+      if (!layer2Result?.length) throw new Error('アイデア生成失敗');
+      
+      const layer3Result = await executeLayer3(layer3Agents, layer1Result.allEntities, layer2Result);
+      if (!layer3Result?.length) addLog('⚠️ 構造化層をスキップ', 'warning');
+      
+      const layer4Result = await executeLayer4(layer4Agents, globalWish, layer1Result.allEntities, layer2Result, layer3Result);
+      if (!layer4Result?.length) throw new Error('収束失敗');
+      
+      const layer5Result = await executeLayer5(layer5Agents, layer2Result, layer4Result);
+      if (!layer5Result.evaluations?.length) throw new Error('評価失敗');
+      
+      generateFinalReport(layer5Result.targets, layer5Result.evaluations);
+      
+    } catch (error) {
+      addLog(`❌ システムエラー: ${error.message}`, 'error');
+      setCurrentPhase('error');
+    }
+    
+    setIsProcessing(false);
+  };
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center mb-4">
+          <h1 className="text-3xl font-bold text-white mb-1 flex items-center justify-center gap-3">
+            <Layers className="w-8 h-8 text-purple-400" />
+            AIエコノミーシステム v4 (Gemini Edition)
+            {activeRequests > 0 && (
+              <span className="ml-3 text-sm bg-blue-500/30 px-3 py-1 rounded-full flex items-center gap-2">
+                <Activity className="w-4 h-4 animate-pulse" />
+                {activeRequests}並列
+              </span>
+            )}
+          </h1>
+          <p className="text-gray-300 text-sm">基礎分析層を追加した6層創発システム (Powered by Gemini)</p>
+        </div>
+
+        <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 mb-4 border border-white/20">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-white font-bold flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              設定
+            </h2>
+            <div className="flex gap-2">
+              {apiHistory.length > 0 && (
+                <button 
+                  onClick={() => setShowApiHistory(!showApiHistory)} 
+                  className="px-3 py-1 bg-purple-500/30 text-purple-300 rounded hover:bg-purple-500/40 flex items-center gap-1"
+                >
+                  <FileText className="w-4 h-4" />
+                  API履歴({apiHistory.length})
+                </button>
+              )}
+              {(finalReport || apiHistory.length > 0) && (
+                <button onClick={exportToJSON} className="px-3 py-1 bg-green-500/30 text-green-300 rounded hover:bg-green-500/40 flex items-center gap-1">
+                  <Download className="w-4 h-4" />
+                  JSON
+                </button>
+              )}
+              <button onClick={() => setShowSettings(!showSettings)} className="text-gray-300 hover:text-white">
+                {showSettings ? <ChevronUp /> : <ChevronDown />}
+              </button>
+            </div>
+          </div>
+          
+          {showSettings && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-white text-xs">Wish</label>
+                  <input type="text" value={globalWish} onChange={(e) => setGlobalWish(e.target.value)} className="w-full px-2 py-1 bg-white/10 border border-white/30 rounded text-white text-sm"/>
+                </div>
+                <div>
+                  <label className="text-white text-xs">背景</label>
+                  <input type="text" value={background} onChange={(e) => setBackground(e.target.value)} className="w-full px-2 py-1 bg-white/10 border border-white/30 rounded text-white text-sm"/>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
+                <div className="bg-purple-500/20 rounded p-2 border border-purple-400/50">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-purple-300 text-xs font-bold">L1:生成</h3>
+                    <button onClick={addLayer1Agent} className="text-purple-300 hover:text-purple-200"><Plus className="w-4 h-4" /></button>
+                  </div>
+                  {layer1Agents.map((agent, i) => (
+                    <div key={agent.id} className="mb-2 bg-black/20 rounded p-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-white text-xs">Agent{i + 1}</span>
+                        {layer1Agents.length > 1 && (<button onClick={() => removeLayer1Agent(agent.id)} className="text-red-400 hover:text-red-300"><Trash2 className="w-3 h-3" /></button>)}
+                      </div>
+                      <div className="grid grid-cols-3 gap-1 mt-1">
+                        {perspectives.map(p => (
+                          <label key={p.id} className="flex items-center gap-0.5">
+                            <input type="checkbox" checked={agent.perspectives.includes(p.id)} onChange={(e) => {
+                                const newP = e.target.checked ? [...agent.perspectives, p.id] : agent.perspectives.filter(pid => pid !== p.id);
+                                updateLayer1Agent(agent.id, newP);
+                              }} className="w-3 h-3"/>
+                            <span className="text-xs text-gray-300">{p.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-blue-500/20 rounded p-2 border border-blue-400/50">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-blue-300 text-xs font-bold">L2:アイデア</h3>
+                    <div className="flex items-center gap-1">
+                      <input type="number" min="1" max="5" value={layer2Iterations} onChange={(e) => setLayer2Iterations(parseInt(e.target.value))} className="w-10 px-1 py-0.5 bg-white/10 border border-white/30 rounded text-white text-xs" title="反復回数"/>
+                      <button onClick={addLayer2Agent} className="text-blue-300 hover:text-blue-200"><Plus className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                  {layer2Agents.map((agent, i) => (
+                    <div key={agent.id} className="mb-1 bg-black/20 rounded p-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-white text-xs">A{i + 1}</span>
+                        <select value={agent.type} onChange={(e) => updateLayer2Agent(agent.id, e.target.value, agent.entityCount)} className="flex-1 px-1 py-0.5 bg-white/10 border border-white/30 rounded text-white text-xs">
+                          {layer2Types.map(t => (<option key={t.id} value={t.id}>{t.name}</option>))}
+                        </select>
+                        {layer2Agents.length > 1 && (<button onClick={() => removeLayer2Agent(agent.id)} className="text-red-400 hover:text-red-300"><Trash2 className="w-3 h-3" /></button>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-cyan-500/20 rounded p-2 border border-cyan-400/50">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-cyan-300 text-xs font-bold">L3:構造化</h3>
+                    <button onClick={addLayer3Agent} className="text-cyan-300 hover:text-cyan-200"><Plus className="w-4 h-4" /></button>
+                  </div>
+                  {layer3Agents.map((agent, i) => (
+                    <div key={agent.id} className="mb-1 bg-black/20 rounded p-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-white text-xs">S{i + 1}</span>
+                        <select value={agent.method} onChange={(e) => updateLayer3Agent(agent.id, e.target.value)} className="flex-1 px-1 py-0.5 bg-white/10 border border-white/30 rounded text-white text-xs">
+                          {structuringMethods.map(m => (<option key={m.id} value={m.id}>{m.name}</option>))}
+                        </select>
+                        {layer3Agents.length > 1 && (<button onClick={() => removeLayer3Agent(agent.id)} className="text-red-400 hover:text-red-300"><Trash2 className="w-3 h-3" /></button>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-green-500/20 rounded p-2 border border-green-400/50">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-green-300 text-xs font-bold">L4:収束</h3>
+                    <button onClick={addLayer4Agent} className="text-green-300 hover:text-green-200"><Plus className="w-4 h-4" /></button>
+                  </div>
+                  {layer4Agents.map((agent, i) => (
+                    <div key={agent.id} className="mb-1 bg-black/20 rounded p-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-white text-xs">A{i + 1}</span>
+                        <select value={agent.criteria} onChange={(e) => updateLayer4Agent(agent.id, e.target.value)} className="flex-1 px-1 py-0.5 bg-white/10 border border-white/30 rounded text-white text-xs">
+                          {layer4Criteria.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                        </select>
+                        {layer4Agents.length > 1 && (<button onClick={() => removeLayer4Agent(agent.id)} className="text-red-400 hover:text-red-300"><Trash2 className="w-3 h-3" /></button>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-red-500/20 rounded p-2 border border-red-400/50">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-red-300 text-xs font-bold">L5:評価</h3>
+                    <button onClick={addLayer5Agent} className="text-red-300 hover:text-red-200"><Plus className="w-4 h-4" /></button>
+                  </div>
+                  {layer5Agents.map((agent, i) => (
+                    <div key={agent.id} className="mb-1 bg-black/20 rounded p-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-white text-xs">A{i + 1}</span>
+                        <select value={agent.criteria} onChange={(e) => updateLayer5Agent(agent.id, e.target.value)} className="flex-1 px-1 py-0.5 bg-white/10 border border-white/30 rounded text-white text-xs">
+                          {evaluationCriteria.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                        </select>
+                        {layer5Agents.length > 1 && (<button onClick={() => removeLayer5Agent(agent.id)} className="text-red-400 hover:text-red-300"><Trash2 className="w-3 h-3" /></button>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-yellow-300" />
+                  <label className="text-yellow-200 text-xs">並列数:</label>
+                  <input type="number" min="1" max="10" value={batchSize} onChange={(e) => setBatchSize(parseInt(e.target.value))} className="w-12 px-1 py-0.5 bg-white/10 border border-white/30 rounded text-white text-xs"/>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-300" />
+                  <label className="text-blue-200 text-xs">遅延:</label>
+                  <input type="number" min="100" max="2000" step="100" value={apiDelay} onChange={(e) => setApiDelay(parseInt(e.target.value))} className="w-16 px-1 py-0.5 bg-white/10 border border-white/30 rounded text-white text-xs"/>
+                  <span className="text-blue-200 text-xs">ms</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Shuffle className="w-4 h-4 text-purple-300" />
+                  <label className="text-purple-200 text-xs">シード:</label>
+                  <input type="number" value={randomSeed} onChange={(e) => setRandomSeed(parseInt(e.target.value))} className="w-24 px-1 py-0.5 bg-white/10 border border-white/30 rounded text-white text-xs"/>
+                </div>
+              </div>
+              <button onClick={runSystem} disabled={isProcessing} className="w-full py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded font-medium hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                {isProcessing ? (<><Loader2 className="w-4 h-4 animate-spin" />処理中...</>) : (<><Play className="w-4 h-4" />実行</>)}
+              </button>
+            </div>
+          )}
+        </div>
+        
+        {currentPhase !== 'idle' && (
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 mb-4 border border-white/20">
+            <div className="flex items-center justify-around">
+              {['layer0', 'layer1', 'layer2', 'layer3', 'layer4', 'layer5'].map((phase, i) => (
+                <div key={phase} className={`flex flex-col items-center ${
+                  currentPhase === phase ? 'text-yellow-400' : 
+                  currentPhase === 'complete' || (['layer1', 'layer2', 'layer3', 'layer4', 'layer5'].includes(currentPhase) && i < ['layer0', 'layer1', 'layer2', 'layer3', 'layer4', 'layer5'].indexOf(currentPhase)) ? 'text-green-400' : 'text-gray-400'
+                }`}>
+                  <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs ${currentPhase === phase ? 'border-yellow-400 animate-pulse' : ''}`}>
+                    {i}{phase === 'layer2' && currentIteration > 0 && currentPhase === 'layer2' && (<span className="ml-0.5">-{currentIteration}</span>)}
+                  </div>
+                  <span className="text-xs mt-1">{['基礎', '生成', '反復', '構造化', '収束', '評価'][i]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {logs.length > 0 && (
+          <div className="bg-black/50 backdrop-blur-md rounded-xl p-3 mb-4 border border-white/20 max-h-48 overflow-y-auto">
+            <h3 className="text-white text-sm font-bold mb-2 sticky top-0 bg-black/50 pb-1">📋 実行ログ</h3>
+            {logs.map((log, index) => (
+              <div key={index} className={`text-xs mb-0.5 font-mono ${
+                log.type === 'error' ? 'text-red-400' :
+                log.type === 'success' ? 'text-green-400' :
+                log.type === 'warning' ? 'text-yellow-400' :
+                log.type === 'process' ? 'text-blue-400 font-bold' : 'text-gray-400'
+              }`}>
+                <span className="opacity-50">[{log.timestamp}]</span> {log.message}
+              </div>
+            ))}
+            <div ref={logsEndRef} />
+          </div>
+        )}
+        
+        {baseAnalysis && (
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 mb-4 border border-white/20">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-white font-bold text-sm flex items-center gap-2"><Compass className="w-4 h-4" />ベース分析（第0層）- 王道的コンサルティング</h3>
+              <button onClick={() => setShowBaseAnalysis(!showBaseAnalysis)} className="text-gray-300 hover:text-white">{showBaseAnalysis ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+            </div>
+            {showBaseAnalysis && (
+              <>
+                <div className="bg-indigo-500/20 rounded p-2 mb-2 border border-indigo-400/30">
+                  <div className="text-indigo-300 text-xs font-bold mb-1">🎯 真のニーズ</div>
+                  <div className="text-white text-sm">{baseAnalysis.contextUnderstanding}</div>
+                </div>
+                {baseAnalysis.strategicDirection && (
+                  <div className="bg-purple-500/20 rounded p-2 mb-2 border border-purple-400/30">
+                    <div className="text-purple-300 text-xs font-bold mb-1">📍 戦略的方向性</div>
+                    <div className="space-y-1">
+                      <div className="text-xs"><span className="text-yellow-300">最優先:</span><span className="text-white ml-1">{baseAnalysis.strategicDirection.primaryFocus}</span></div>
+                      <div className="text-xs"><span className="text-blue-300">次点:</span><span className="text-white ml-1">{baseAnalysis.strategicDirection.secondaryFocus}</span></div>
+                      <div className="text-xs"><span className="text-green-300">長期:</span><span className="text-white ml-1">{baseAnalysis.strategicDirection.longTermVision}</span></div>
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {baseAnalysis.orthodoxApproach && baseAnalysis.orthodoxApproach.length > 0 && (
+                    <div className="bg-green-500/20 rounded p-2 border border-green-400/30">
+                      <div className="text-green-300 text-xs font-bold mb-1">✅ 王道アプローチ</div>
+                      {baseAnalysis.orthodoxApproach.map((approach, i) => (<div key={i} className="mb-1"><div className="text-white text-xs font-medium">{approach.title}</div><div className="text-gray-300 text-xs">{approach.description}</div></div>))}
+                    </div>
+                  )}
+                  {baseAnalysis.classicalTechniques && baseAnalysis.classicalTechniques.length > 0 && (
+                    <div className="bg-cyan-500/20 rounded p-2 border border-cyan-400/30">
+                      <div className="text-cyan-300 text-xs font-bold mb-1">🔧 古典的手法</div>
+                      {baseAnalysis.classicalTechniques.map((tech, i) => (<div key={i} className="mb-1"><div className="text-white text-xs font-medium">{tech.technique}</div><div className="text-gray-300 text-xs">{tech.principle}</div></div>))}
+                    </div>
+                  )}
+                  {baseAnalysis.commonChallenges && baseAnalysis.commonChallenges.length > 0 && (
+                    <div className="bg-yellow-500/20 rounded p-2 border border-yellow-400/30">
+                      <div className="text-yellow-300 text-xs font-bold mb-1">⚠️ よくある課題</div>
+                      {baseAnalysis.commonChallenges.map((challenge, i) => (<div key={i} className="mb-1"><div className="text-white text-xs font-medium">{challenge.challenge}</div><div className="text-gray-300 text-xs">対策: {challenge.mitigation}</div></div>))}
+                    </div>
+                  )}
+                  {baseAnalysis.avoidList && baseAnalysis.avoidList.length > 0 && (
+                    <div className="bg-red-500/20 rounded p-2 border border-red-400/30">
+                      <div className="text-red-300 text-xs font-bold mb-1">❌ 避けるべきこと</div>
+                      {baseAnalysis.avoidList.map((avoid, i) => (<div key={i} className="mb-1"><div className="text-white text-xs font-medium">{avoid.avoid}</div><div className="text-gray-300 text-xs">理由: {avoid.reason}</div></div>))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        
+        {allEntities.length > 0 && (
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 mb-4 border border-white/20">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-white font-bold text-sm flex items-center gap-2"><Package className="w-4 h-4" />生成されたエンティティ（第1層）- 計{allEntities.length}個</h3>
+              <button onClick={() => setShowEntities(!showEntities)} className="text-gray-300 hover:text-white">{showEntities ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+            </div>
+            {showEntities && (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 max-h-64 overflow-y-auto">
+                {allEntities.map((entity) => (<div key={entity.id} className="bg-purple-500/20 rounded p-2 border border-purple-400/30"><div className="text-white text-xs font-bold truncate">{entity.name}</div><p className="text-gray-300 text-xs mt-1 truncate">{entity.description}</p><div className="text-purple-300 text-xs mt-1 opacity-80">{entity.category}</div></div>))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {layer2IterationHistory.length > 0 && (
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 mb-4 border border-white/20">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-white font-bold text-sm flex items-center gap-2"><Lightbulb className="w-4 h-4" />生成されたアイデア（第2層）</h3>
+              <button onClick={() => setShowIdeas(!showIdeas)} className="text-gray-300 hover:text-white">{showIdeas ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+            </div>
+            {showIdeas && (
+              <div className="space-y-3">
+                {layer2IterationHistory.map((iter, idx) => (
+                  <div key={idx}>
+                    <h4 className="text-blue-300 font-bold text-xs mb-1">--- 反復 {iter.iteration} ---</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {iter.results.flatMap(r => (r && r.ideas) ? r.ideas : []).map(idea => (<div key={idea.id} className="bg-blue-500/20 rounded p-2 border border-blue-400/30"><div className="text-white font-medium text-xs">{idea.title}</div><p className="text-gray-300 text-xs mt-1">{idea.description}</p><div className="text-blue-200 text-xs mt-1 opacity-80">基礎: {idea.asIsBasis}</div></div>))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {layer3Results.length > 0 && (
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 mb-4 border border-white/20">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-white font-bold text-sm flex items-center gap-2"><GitBranch className="w-4 h-4" />構造化分析（第3層）</h3>
+              <button onClick={() => setShowStructures(!showStructures)} className="text-gray-300 hover:text-white">{showStructures ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+            </div>
+            {showStructures && (
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {layer3Results.map(result => (
+                  result && <div key={result.agentId} className="bg-cyan-500/20 p-2 rounded border border-cyan-400/30">
+                    <h4 className="text-cyan-300 font-bold text-xs mb-2">手法: {structuringMethods.find(m => m.id === result.method)?.name}</h4>
+                    {result.structuredData && result.structuredData.map(data => (<div key={data.id} className="mb-2"><div className="text-white font-medium text-xs">{data.name}</div><p className="text-gray-300 text-xs mt-1">{data.description}</p><p className="text-cyan-200 text-xs mt-1">洞察: {data.insights}</p></div>))}
+                  </div>
+                ))}
+               </div>
+            )}
+          </div>
+        )}
+        
+        {layer4Results.length > 0 && (
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3 mb-4 border border-white/20">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-white font-bold text-sm flex items-center gap-2"><Combine className="w-4 h-4" />統合案（第4層）</h3>
+              <button onClick={() => setShowSolutions(!showSolutions)} className="text-gray-300 hover:text-white">{showSolutions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</button>
+            </div>
+            {showSolutions && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {layer4Results.flatMap(r => (r && r.solutions) ? r.solutions : []).map(sol => (<div key={sol.id} className="bg-green-500/20 p-3 rounded border border-green-400/30"><h4 className="text-white font-bold text-sm mb-1">{sol.title}</h4><p className="text-gray-300 text-xs mb-2">{sol.description}</p><div className="bg-black/20 p-1.5 rounded"><p className="text-green-300 text-xs"><span className="font-bold">最初の一歩:</span> {sol.quickWin}</p><p className="text-green-300 text-xs mt-1"><span className="font-bold">期待成果:</span> {sol.expectedOutcome}</p></div></div>))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {finalReport && finalReport.ranking && (
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
+            <h2 className="text-xl font-bold text-white mb-3 flex items-center gap-2"><Award className="w-5 h-5 text-yellow-400" />最終ランキング ({finalReport.totalTargets}対象、{finalReport.totalEvaluators}評価者)</h2>
+            <div className="space-y-2">
+              {finalReport.ranking.map((item, index) => (
+                <div key={index} className={`rounded p-3 border ${
+                  index === 0 ? 'bg-yellow-500/20 border-yellow-400' :
+                  index === 1 ? 'bg-gray-400/20 border-gray-400' :
+                  index === 2 ? 'bg-orange-500/20 border-orange-400' : 'bg-white/5 border-white/20'
+                }`}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3 flex-1">
+                      <span className={`text-2xl font-bold ${
+                        index === 0 ? 'text-yellow-400' :
+                        index === 1 ? 'text-gray-300' :
+                        index === 2 ? 'text-orange-400' : 'text-gray-400'
+                      }`}>#{index + 1}</span>
+                      <div className="flex-1">
+                        <h3 className="text-white font-bold mb-1">{item.target.title}</h3>
+                        <p className="text-gray-300 text-sm mb-2">{item.target.description || ''}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs bg-blue-500/30 text-blue-300 px-2 py-0.5 rounded">{item.target.type === 'solution' ? '統合案' : 'アイデア'}</span>
+                          <span className="text-xs text-gray-400">ID: {item.target.id}</span>
+                        </div>
+                        {item.evaluatorDetails && item.evaluatorDetails.length > 0 && (
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            {item.evaluatorDetails.map((detail, di) => (<div key={di} className="bg-black/30 rounded p-1 text-xs"><span className="text-yellow-300">{detail.criteria}:</span><span className="text-white ml-1">{detail.score}点</span></div>))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-purple-400">{item.average.toFixed(1)}点</span>
+                      <div className="text-xs text-gray-400 mt-1">{item.scores.length}評価</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+};
+
+export default AIEconomySystemV4;
+
