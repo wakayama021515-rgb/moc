@@ -1,0 +1,424 @@
+import React, { useState } from 'react';
+import { Search, ChevronDown, ChevronUp, Info, Loader } from 'lucide-react';
+
+// 社内サービスマスタ（100個）
+const SERVICES = [
+  // 人事・労務系
+  { id: 1, name: '勤怠管理システム', category: '人事労務', tags: ['出退勤', '休暇', '残業'], description: '出退勤管理、休暇申請、残業申請' },
+  { id: 2, name: '給与明細ポータル', category: '人事労務', tags: ['給与', '明細', '税金'], description: '給与明細の確認、源泉徴収票ダウンロード' },
+  { id: 3, name: '人事評価システム', category: '人事労務', tags: ['評価', '目標', 'フィードバック'], description: '目標設定、評価入力、フィードバック管理' },
+  { id: 4, name: '入社手続きポータル', category: '人事労務', tags: ['入社', 'オンボーディング'], description: '入社書類提出、オンボーディング情報' },
+  { id: 5, name: '退職手続きシステム', category: '人事労務', tags: ['退職', '離任'], description: '退職申請、引き継ぎ管理' },
+  { id: 6, name: '社内異動申請', category: '人事労務', tags: ['異動', 'キャリア'], description: '部署異動、職種変更の申請' },
+  { id: 7, name: '研修予約システム', category: '人事労務', tags: ['研修', '育成', '学習'], description: '社内研修の申し込み、履歴管理' },
+  { id: 8, name: 'メンター制度ポータル', category: '人事労務', tags: ['メンター', '育成'], description: 'メンターマッチング、相談記録' },
+  { id: 9, name: '健康管理ポータル', category: '人事労務', tags: ['健康', '産業医'], description: '健康診断予約、産業医面談申し込み' },
+  { id: 10, name: '福利厚生サイト', category: '人事労務', tags: ['福利厚生', '割引'], description: '各種福利厚生サービスの利用' },
+  { id: 11, name: '会議室予約システム', category: '総務施設', tags: ['会議室', '予約'], description: '会議室の予約・管理' },
+  { id: 12, name: '座席管理システム', category: '総務施設', tags: ['座席', 'フリーアドレス'], description: '座席配置、フリーアドレス管理' },
+  { id: 13, name: '備品発注システム', category: '総務施設', tags: ['備品', '文具', '発注'], description: '文具・消耗品の発注' },
+  { id: 14, name: '名刺発注システム', category: '総務施設', tags: ['名刺'], description: '名刺のデザイン・発注' },
+  { id: 15, name: '郵便・宅配管理', category: '総務施設', tags: ['郵便', '配送'], description: '郵便物・宅配便の管理' },
+  { id: 16, name: '社用車予約', category: '総務施設', tags: ['社用車', '車両'], description: '社用車の予約・利用管理' },
+  { id: 17, name: '駐車場管理', category: '総務施設', tags: ['駐車場'], description: '駐車場の利用申請・管理' },
+  { id: 18, name: '来客受付システム', category: '総務施設', tags: ['来客', '受付'], description: '来客登録、受付管理' },
+  { id: 19, name: '鍵・セキュリティカード管理', category: '総務施設', tags: ['セキュリティ', '入館'], description: 'セキュリティカード発行・管理' },
+  { id: 20, name: 'オフィスレイアウト管理', category: '総務施設', tags: ['レイアウト', '設備'], description: 'オフィスレイアウトの計画・変更' },
+  { id: 21, name: '経費精算システム', category: '経理財務', tags: ['経費', '精算'], description: '経費申請、領収書アップロード' },
+  { id: 22, name: '出張申請システム', category: '経理財務', tags: ['出張', '旅費'], description: '出張申請、旅費事前申請' },
+  { id: 23, name: '請求書処理システム', category: '経理財務', tags: ['請求書', '支払い'], description: '請求書の発行・受領処理' },
+  { id: 24, name: '予算管理システム', category: '経理財務', tags: ['予算', '管理会計'], description: '部門予算の管理・トラッキング' },
+  { id: 25, name: '契約管理システム', category: '経理財務', tags: ['契約', '法務'], description: '契約書の管理・更新アラート' },
+  { id: 26, name: '与信管理システム', category: '経理財務', tags: ['与信', 'リスク'], description: '取引先の与信チェック' },
+  { id: 27, name: '資産管理システム', category: '経理財務', tags: ['資産', '固定資産'], description: '固定資産の登録・管理' },
+  { id: 28, name: '法人カード管理', category: '経理財務', tags: ['法人カード', '経費'], description: '法人カードの申請・利用明細' },
+  { id: 29, name: 'PCアカウント申請', category: 'IT', tags: ['アカウント', 'PC'], description: 'PC・アカウントの新規申請' },
+  { id: 30, name: 'ソフトウェアライセンス管理', category: 'IT', tags: ['ライセンス', 'ソフトウェア'], description: 'ソフトウェアライセンスの申請' },
+  { id: 31, name: 'VPN申請システム', category: 'IT', tags: ['VPN', 'リモート'], description: 'VPN接続の申請・設定' },
+  { id: 32, name: 'IT機器貸与申請', category: 'IT', tags: ['機器', 'レンタル'], description: 'モニター、周辺機器の貸与申請' },
+  { id: 33, name: 'ITヘルプデスク', category: 'IT', tags: ['サポート', 'トラブル'], description: 'ITトラブルの問い合わせ' },
+  { id: 34, name: 'システムアクセス権限管理', category: 'IT', tags: ['アクセス権', 'セキュリティ'], description: 'システムアクセス権の申請・変更' },
+  { id: 35, name: 'クラウドサービス管理', category: 'IT', tags: ['クラウド', 'AWS'], description: 'クラウド環境の申請・管理' },
+  { id: 36, name: 'データベースアクセス申請', category: 'IT', tags: ['DB', 'データベース'], description: 'DB接続権限の申請' },
+  { id: 37, name: 'セキュリティインシデント報告', category: 'IT', tags: ['セキュリティ', 'インシデント'], description: 'セキュリティ事案の報告' },
+  { id: 38, name: 'モバイルデバイス管理', category: 'IT', tags: ['スマホ', 'モバイル'], description: '社用スマホ・タブレットの管理' },
+  { id: 39, name: 'Slack（社内チャット）', category: 'コラボレーション', tags: ['チャット', 'コミュニケーション'], description: '社内チャットツール' },
+  { id: 40, name: 'メール（Exchange）', category: 'コラボレーション', tags: ['メール'], description: '社内メールシステム' },
+  { id: 41, name: 'ビデオ会議システム', category: 'コラボレーション', tags: ['会議', 'ビデオ'], description: 'オンライン会議ツール' },
+  { id: 42, name: '社内SNS', category: 'コラボレーション', tags: ['SNS', '社内交流'], description: '社内コミュニケーションSNS' },
+  { id: 43, name: '社内掲示板', category: 'コラボレーション', tags: ['掲示板', 'お知らせ'], description: '全社お知らせ・掲示板' },
+  { id: 44, name: '社内Wiki', category: 'コラボレーション', tags: ['Wiki', 'ナレッジ'], description: '社内ナレッジベース' },
+  { id: 45, name: 'ファイル共有システム', category: 'コラボレーション', tags: ['ファイル', '共有'], description: '社内ファイル共有・ストレージ' },
+  { id: 46, name: '電子署名システム', category: 'コラボレーション', tags: ['電子署名', '承認'], description: '電子署名・承認フロー' },
+  { id: 47, name: 'Asana（タスク管理）', category: 'プロジェクト管理', tags: ['タスク', 'プロジェクト'], description: 'タスク・プロジェクト管理ツール' },
+  { id: 48, name: 'Jira（開発管理）', category: 'プロジェクト管理', tags: ['開発', 'イシュー'], description: '開発プロジェクト管理' },
+  { id: 49, name: 'ガントチャートツール', category: 'プロジェクト管理', tags: ['ガントチャート', 'スケジュール'], description: 'プロジェクトスケジュール管理' },
+  { id: 50, name: '工数管理システム', category: 'プロジェクト管理', tags: ['工数', '実績'], description: '工数入力・実績管理' },
+  { id: 51, name: 'リソース管理システム', category: 'プロジェクト管理', tags: ['リソース', 'アサイン'], description: '人的リソースの配分管理' },
+  { id: 52, name: 'プロジェクト台帳', category: 'プロジェクト管理', tags: ['台帳', '一覧'], description: '全社プロジェクト一覧・台帳' },
+  { id: 53, name: 'Salesforce（CRM）', category: '営業CRM', tags: ['CRM', '顧客管理'], description: '顧客関係管理システム' },
+  { id: 54, name: '案件管理システム', category: '営業CRM', tags: ['案件', '商談'], description: '商談・案件の管理' },
+  { id: 55, name: '見積作成システム', category: '営業CRM', tags: ['見積', '提案'], description: '見積書の作成・承認' },
+  { id: 56, name: '名刺管理システム', category: '営業CRM', tags: ['名刺', '顧客情報'], description: '名刺のデジタル管理' },
+  { id: 57, name: '営業日報システム', category: '営業CRM', tags: ['日報', '活動報告'], description: '営業活動の日報入力' },
+  { id: 58, name: '売上予測ダッシュボード', category: '営業CRM', tags: ['売上', '予測'], description: '売上予測・分析ダッシュボード' },
+  { id: 59, name: 'MAツール（Marketo）', category: 'マーケティング', tags: ['MA', 'リード'], description: 'マーケティングオートメーション' },
+  { id: 60, name: 'Webサイト分析ツール', category: 'マーケティング', tags: ['分析', 'アクセス'], description: 'Web解析・アクセス分析' },
+  { id: 61, name: '広告運用管理ツール', category: 'マーケティング', tags: ['広告', '運用'], description: 'Web広告の運用管理' },
+  { id: 62, name: 'イベント管理システム', category: 'マーケティング', tags: ['イベント', 'セミナー'], description: 'イベント・セミナーの企画管理' },
+  { id: 63, name: 'SNS運用ツール', category: 'マーケティング', tags: ['SNS', 'ソーシャル'], description: 'SNSアカウント運用管理' },
+  { id: 64, name: 'コンテンツ管理システム', category: 'マーケティング', tags: ['CMS', 'コンテンツ'], description: 'Webコンテンツ管理' },
+  { id: 65, name: '問い合わせ管理システム', category: 'カスタマーサポート', tags: ['問い合わせ', 'サポート'], description: '顧客問い合わせの管理' },
+  { id: 66, name: 'FAQ管理システム', category: 'カスタマーサポート', tags: ['FAQ', 'ナレッジ'], description: 'FAQ・ヘルプ記事の管理' },
+  { id: 67, name: 'チャットボットシステム', category: 'カスタマーサポート', tags: ['チャットボット', '自動応答'], description: '顧客向けチャットボット' },
+  { id: 68, name: 'VOC分析ツール', category: 'カスタマーサポート', tags: ['VOC', 'フィードバック'], description: '顧客の声の収集・分析' },
+  { id: 69, name: 'GitHub Enterprise', category: '開発', tags: ['Git', 'バージョン管理'], description: 'ソースコード管理' },
+  { id: 70, name: 'CI/CDパイプライン', category: '開発', tags: ['CI/CD', 'デプロイ'], description: '継続的インテグレーション・デプロイ' },
+  { id: 71, name: 'コードレビューツール', category: '開発', tags: ['レビュー', '品質'], description: 'コードレビュー管理' },
+  { id: 72, name: 'API管理ツール', category: '開発', tags: ['API', 'ドキュメント'], description: 'API仕様管理・テスト' },
+  { id: 73, name: 'パフォーマンス監視ツール', category: '開発', tags: ['監視', 'パフォーマンス'], description: 'システムパフォーマンス監視' },
+  { id: 74, name: 'ログ分析ツール', category: '開発', tags: ['ログ', '分析'], description: 'アプリケーションログ分析' },
+  { id: 75, name: 'テスト管理ツール', category: '開発', tags: ['テスト', 'QA'], description: 'テストケース・実行管理' },
+  { id: 76, name: '開発環境構築ツール', category: '開発', tags: ['開発環境', 'セットアップ'], description: '開発環境の自動構築' },
+  { id: 77, name: 'BIツール（Tableau）', category: 'データ分析', tags: ['BI', '可視化'], description: 'ビジネスインテリジェンスツール' },
+  { id: 78, name: 'データウェアハウス', category: 'データ分析', tags: ['DWH', 'データ基盤'], description: 'データ統合基盤' },
+  { id: 79, name: 'ETLツール', category: 'データ分析', tags: ['ETL', 'データ連携'], description: 'データ抽出・変換・ロード' },
+  { id: 80, name: 'データカタログ', category: 'データ分析', tags: ['カタログ', 'メタデータ'], description: 'データ資産の管理・検索' },
+  { id: 81, name: 'SQL実行環境', category: 'データ分析', tags: ['SQL', 'クエリ'], description: 'SQLクエリ実行環境' },
+  { id: 82, name: '契約書レビューシステム', category: '法務', tags: ['契約', 'レビュー'], description: '契約書の法務レビュー依頼' },
+  { id: 83, name: '法務相談システム', category: '法務', tags: ['相談', '法務'], description: '法務部への相談窓口' },
+  { id: 84, name: 'コンプライアンス研修', category: '法務', tags: ['コンプライアンス', '研修'], description: 'コンプライアンス教育' },
+  { id: 85, name: '内部通報システム', category: '法務', tags: ['通報', 'ホットライン'], description: '内部通報窓口' },
+  { id: 86, name: '規程管理システム', category: '法務', tags: ['規程', 'ルール'], description: '社内規程の閲覧・管理' },
+  { id: 87, name: 'プレスリリース管理', category: '広報IR', tags: ['プレスリリース', '広報'], description: 'プレスリリースの作成・配信' },
+  { id: 88, name: 'メディア対応管理', category: '広報IR', tags: ['メディア', '取材'], description: 'メディア取材の管理' },
+  { id: 89, name: 'IR資料管理', category: '広報IR', tags: ['IR', '投資家'], description: 'IR資料の作成・公開' },
+  { id: 90, name: '購買申請システム', category: '調達購買', tags: ['購買', '発注'], description: '物品・サービスの購買申請' },
+  { id: 91, name: 'サプライヤー管理', category: '調達購買', tags: ['サプライヤー', '取引先'], description: 'サプライヤー情報の管理' },
+  { id: 92, name: '見積依頼システム', category: '調達購買', tags: ['見積', 'RFQ'], description: 'サプライヤーへの見積依頼' },
+  { id: 93, name: '品質管理システム', category: '品質監査', tags: ['品質', 'QMS'], description: '品質管理・不具合管理' },
+  { id: 94, name: '内部監査管理', category: '品質監査', tags: ['監査', '内部統制'], description: '内部監査の計画・実施管理' },
+  { id: 95, name: 'リスク管理システム', category: '品質監査', tags: ['リスク', 'BCP'], description: 'リスク評価・対策管理' },
+  { id: 96, name: '組織図・社員名簿', category: 'その他', tags: ['組織', '社員情報'], description: '組織構成・社員情報の確認' },
+  { id: 97, name: '社内アンケートシステム', category: 'その他', tags: ['アンケート', '調査'], description: '社内アンケートの実施・集計' },
+  { id: 98, name: 'eラーニングプラットフォーム', category: 'その他', tags: ['eラーニング', '学習'], description: 'オンライン学習コンテンツ' },
+  { id: 99, name: '社内イベント管理', category: 'その他', tags: ['イベント', '社内行事'], description: '社内イベントの企画・参加管理' },
+  { id: 100, name: '提案・改善システム', category: 'その他', tags: ['提案', '改善'], description: '業務改善提案の投稿・管理' }
+];
+
+const ServiceConcierge = () => {
+  const [input, setInput] = useState('');
+  const [perspectives, setPerspectives] = useState([]);
+  const [expandedPerspectives, setExpandedPerspectives] = useState(new Set());
+  const [selectedService, setSelectedService] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Claude APIを使った動的推論
+  const analyzeWithClaude = async (userInput) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const prompt = `あなたは社内サービスコンシェルジュのAIです。ユーザーの発話から、適切な観点（軸）を生成し、各観点に対して関連するサービスを確率的にスコアリングしてください。
+
+【ユーザーの発話】
+"${userInput}"
+
+【利用可能な社内サービス一覧】
+${SERVICES.map(s => `${s.id}. ${s.name} (${s.category}) - ${s.description}`).join('\n')}
+
+【タスク】
+1. ユーザーの発話から状況・意図・背景を推測
+2. 3〜5個の「観点（perspective）」を生成（例：「受け入れ準備」「オンボーディング」など）
+3. 各観点について、関連度の高いサービスを5〜8個選び、確率的スコア（0.0〜1.0）を付与
+
+【重要】
+- 観点名は具体的で行動可能なものにする
+- スコアは、その観点においてそのサービスがどれだけ重要か/関連するかを示す
+- 各観点には priority（0.0〜1.0）も付与（その観点自体がこの状況でどれだけ重要か）
+
+【出力形式】
+必ず以下のJSON形式のみで回答してください。他のテキストは一切含めないでください：
+
+{
+  "perspectives": [
+    {
+      "name": "観点名",
+      "priority": 0.92,
+      "services": [
+        {
+          "serviceId": 1,
+          "score": 0.89,
+          "reason": "この観点で重要な理由の簡潔な説明"
+        }
+      ]
+    }
+  ]
+}
+
+DO NOT OUTPUT ANYTHING OTHER THAN VALID JSON. レスポンスはJSONのみです。`;
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 4000,
+          messages: [
+            { role: "user", content: prompt }
+          ]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      let responseText = data.content[0].text;
+      
+      // JSONマークダウンを除去
+      responseText = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      
+      const result = JSON.parse(responseText);
+
+      // サービスIDを実際のサービスオブジェクトにマッピング
+      const enrichedPerspectives = result.perspectives.map(persp => ({
+        ...persp,
+        services: persp.services.map(svc => {
+          const service = SERVICES.find(s => s.id === svc.serviceId);
+          return {
+            service,
+            score: svc.score,
+            reason: svc.reason
+          };
+        }).filter(svc => svc.service) // 存在しないIDを除外
+      }));
+
+      setPerspectives(enrichedPerspectives);
+      
+      // 上位2つの観点を自動展開
+      const topPerspectives = new Set(enrichedPerspectives.slice(0, 2).map(p => p.name));
+      setExpandedPerspectives(topPerspectives);
+
+    } catch (err) {
+      console.error('Analysis error:', err);
+      setError(`エラーが発生しました: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = () => {
+    if (input.trim()) {
+      analyzeWithClaude(input);
+    }
+  };
+
+  const togglePerspective = (perspectiveName) => {
+    const newExpanded = new Set(expandedPerspectives);
+    if (newExpanded.has(perspectiveName)) {
+      newExpanded.delete(perspectiveName);
+    } else {
+      newExpanded.add(perspectiveName);
+    }
+    setExpandedPerspectives(newExpanded);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+      <div className="max-w-6xl mx-auto">
+        {/* ヘッダー */}
+        <div className="text-center mb-8 pt-8">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">社内サービスコンシェルジュ</h1>
+          <p className="text-gray-600">AIがあなたの状況から最適なサービスを提案します</p>
+          <div className="mt-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm inline-block">
+            ✨ AI推論エンジン搭載
+          </div>
+        </div>
+
+        {/* 検索ボックス */}
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="例: 来月から新メンバーが2人入る、出張に行く、体調が悪い..."
+              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+            <button
+              onClick={handleSearch}
+              disabled={loading}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 disabled:bg-gray-400"
+            >
+              {loading ? <Loader size={20} className="animate-spin" /> : <Search size={20} />}
+              {loading ? 'AI分析中...' : '探す'}
+            </button>
+          </div>
+        </div>
+
+        {/* エラー表示 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-8">
+            <p className="text-red-700">{error}</p>
+          </div>
+        )}
+
+        {/* ローディング表示 */}
+        {loading && (
+          <div className="text-center py-12">
+            <Loader size={48} className="mx-auto animate-spin text-blue-600 mb-4" />
+            <p className="text-gray-600">AIが状況を分析しています...</p>
+            <p className="text-sm text-gray-500 mt-2">観点を生成し、最適なサービスをスコアリング中</p>
+          </div>
+        )}
+
+        {/* 観点とサービス一覧 */}
+        {!loading && perspectives.length > 0 && (
+          <div className="space-y-4">
+            {perspectives.map((perspective) => (
+              <div key={perspective.name} className="bg-white rounded-lg shadow-md overflow-hidden">
+                {/* 観点ヘッダー */}
+                <div
+                  onClick={() => togglePerspective(perspective.name)}
+                  className="flex items-center justify-between p-5 cursor-pointer hover:bg-gray-50 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-semibold text-gray-800">{perspective.name}</h2>
+                    <div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                      重要度 {Math.round(perspective.priority * 100)}%
+                    </div>
+                  </div>
+                  {expandedPerspectives.has(perspective.name) ? (
+                    <ChevronUp className="text-gray-400" />
+                  ) : (
+                    <ChevronDown className="text-gray-400" />
+                  )}
+                </div>
+
+                {/* サービスリスト */}
+                {expandedPerspectives.has(perspective.name) && (
+                  <div className="border-t border-gray-100 p-5">
+                    <div className="space-y-3">
+                      {perspective.services.map(({ service, score, reason }) => (
+                        <div
+                          key={service.id}
+                          onClick={() => setSelectedService(service)}
+                          className="flex items-start gap-4 p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition cursor-pointer"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-medium text-gray-800">{service.name}</h3>
+                              <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                                {service.category}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-2">{service.description}</p>
+                            {reason && (
+                              <p className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded inline-block">
+                                💡 {reason}
+                              </p>
+                            )}
+                            <div className="flex gap-1 mt-2">
+                              {service.tags.slice(0, 3).map(tag => (
+                                <span key={tag} className="text-xs px-2 py-1 bg-gray-50 text-gray-600 rounded">
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="text-sm font-semibold text-blue-600">
+                              {Math.round(score * 100)}%
+                            </div>
+                            <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
+                                style={{ width: `${score * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* サービス詳細モーダル */}
+        {selectedService && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            onClick={() => setSelectedService(null)}
+          >
+            <div
+              className="bg-white rounded-lg max-w-2xl w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-800 mb-2">{selectedService.name}</h2>
+                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+                    {selectedService.category}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSelectedService(null)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-gray-700 mb-4">{selectedService.description}</p>
+              <div className="mb-4">
+                <h3 className="font-semibold text-gray-700 mb-2">機能タグ</h3>
+                <div className="flex flex-wrap gap-2">
+                  {selectedService.tags.map(tag => (
+                    <span key={tag} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 初期状態のプレースホルダー */}
+        {perspectives.length === 0 && input === '' && !loading && (
+          <div className="text-center py-12">
+            <div className="text-gray-400 mb-4">
+              <Info size={48} className="mx-auto" />
+            </div>
+            <p className="text-gray-600 mb-4">どんな状況ですか？AIが最適なサービスを提案します</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {['新メンバーが入る', '出張に行く', 'プロジェクト開始', '体調不良', 'データ分析したい'].map(example => (
+                <button
+                  key={example}
+                  onClick={() => {
+                    setInput(example);
+                    setTimeout(() => analyzeWithClaude(example), 100);
+                  }}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition text-sm"
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ServiceConcierge;
